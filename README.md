@@ -182,12 +182,13 @@ protocol units. `door`, `motor`, and `motor1` select the linked motor.
 ./interceptorctl power set 24.00 1.00    # voltage/current in V/A
 ./interceptorctl power on
 ./interceptorctl power off
-./interceptorctl power raw --hex "01 03 00 1c 00 01 e4 0d"
-./interceptorctl power raw --hex "01 03 00 1c 00 01 e4 0d" --timeout-ms 1000 --idle-ms 20
+./interceptorctl power raw --hex "00 03 00 1c 00 01 44 1d"
+./interceptorctl power raw --hex "00 03 00 1c 00 01 44 1d" --timeout-ms 1000 --idle-ms 20
 ```
 
 `power raw` is a debug command that sends exact raw bytes to the MCU USART3
-power RS485 path. It does not auto-fill CRC.
+power RS485 path. It does not auto-fill CRC. Factory GPpower3000 supplies use
+Modbus address `0x00`.
 
 ### UPS
 
