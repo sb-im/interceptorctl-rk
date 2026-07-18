@@ -1,0 +1,22 @@
+[Unit]
+Description=Interceptor control daemon
+After=network.target
+Conflicts=sbmcu.service sbdockctl3.service sbdockctl300.service
+
+[Service]
+Type=simple
+User=orangepi
+WorkingDirectory=/home/orangepi/interceptorctl
+Environment=PYTHONUNBUFFERED=1
+Environment=INTERCEPTOR_CAN_IFACE=can0
+Environment=INTERCEPTOR_CAN_BITRATE=500000
+ExecStartPre=+/usr/bin/rm -f /tmp/interceptorctl.sock
+ExecStartPre=+/bin/sh -c '/usr/sbin/ip link set "$INTERCEPTOR_CAN_IFACE" down 2>/dev/null || true; /usr/sbin/ip link set "$INTERCEPTOR_CAN_IFACE" type can bitrate "$INTERCEPTOR_CAN_BITRATE" restart-ms 100 2>/dev/null || true; /usr/sbin/ip link set "$INTERCEPTOR_CAN_IFACE" up 2>/dev/null || true'
+ExecStart=/usr/bin/python3 /home/orangepi/interceptorctl/daemon.py --serial /dev/mcu --socket /tmp/interceptorctl.sock --log /home/orangepi/interceptorctl/logs/interceptorctl.log --log-max-bytes 10485760 --log-max-files 50
+ExecStopPost=+/usr/bin/rm -f /tmp/interceptorctl.sock
+Restart=always
+RestartSec=2s
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

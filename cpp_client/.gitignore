@@ -1,0 +1,20 @@
+# Build outputs
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Example binaries
+dock_client_example
+
+# Local build directories
+build/
+cmake-build-*/
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+

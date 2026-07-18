@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+logs/
+firmware/
+*.log
+*.sock
+
+.idea/
+.vscode/
+
+cpp_client/*.o
+cpp_client/*.a
+cpp_client/dock_client_example
+cpp_client/door_open_demo
+cpp_client/*_demo
