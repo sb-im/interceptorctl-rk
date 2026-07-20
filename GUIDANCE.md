@@ -21,7 +21,7 @@
 - 客户程序、测试脚本、调度程序都通过 `/tmp/interceptorctl.sock` 发 JSON 请求。
 - 每个请求是一行 UTF-8 JSON，以 `\n` 结尾；每个回复也是一行 JSON。
 - socket 路径默认是 `/tmp/interceptorctl.sock`。
-- 当前 MCU 固件版本是 `0x002B`，RK3588 `interceptorctl` 版本是 `20260701-1`。
+- 当前 MCU 固件版本是 `0x002C`，RK3588 `interceptorctl` 版本是 `20260701-1`。
 
 启动 daemon：
 
@@ -48,7 +48,7 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 回复也是一行 JSON。客户默认 API 只保留业务字段，例如：
 
 ```json
-{"ok":true,"version":"0x002B"}
+{"ok":true,"version":"0x002C"}
 ```
 
 通用字段：

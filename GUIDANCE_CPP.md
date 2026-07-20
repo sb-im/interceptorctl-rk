@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x002B`
+- MCU 固件版本：`0x002C`
 - RK3588 `interceptorctl` 版本：`20260701-1`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -229,7 +229,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x002B"}
+{"ok":true,"version":"0x002C"}
 ```
 
 字段说明：

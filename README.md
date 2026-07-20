@@ -19,7 +19,7 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current STM32 firmware version: `0x002B`.
+Current STM32 firmware version: `0x002C`.
 Current RK3588 `interceptorctl` version: `20260701-1`.
 
 ## Files
@@ -96,24 +96,24 @@ measurements.
 
 ## Firmware Flash
 
-On the RK3588 board, put MCU firmware under:
+On the RK3588 board, MCU firmware is stored under:
 
 ```text
-/home/orangepi/dockctl3/firmware/
+/home/orangepi/interceptorctl/tools/
 ```
 
 The verified flash flow on `jjj` is:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/dockctl3/firmware/sbdock_0x002B_single_axis_trap_update.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x002C_serial_motor_recovery.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/dockctl3/firmware/sbdock_0x002B_single_axis_trap_update.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x002C_serial_motor_recovery.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs

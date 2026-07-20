@@ -1104,10 +1104,23 @@ class McuClient:
         self._ser = serial.Serial(self.port, self.baud, timeout=0.08, write_timeout=1.0)
         self.logger.info("opened MCU serial %s @ %s", self.port, self.baud)
 
+    def _drop_serial_locked(self, reason: str) -> None:
+        ser = self._ser
+        self._ser = None
+        if ser is None:
+            return
+        try:
+            if ser.is_open:
+                ser.close()
+        except Exception as exc:
+            self.logger.warning("error closing MCU serial after %s: %s", reason, exc)
+        self.logger.warning("dropped MCU serial after %s", reason)
+
     def close(self) -> None:
         with self._lock:
             if self._ser and self._ser.is_open:
                 self._ser.close()
+            self._ser = None
         if self._can_listener:
             self._can_listener.stop()
         self._motion_stop.set()
@@ -1383,54 +1396,73 @@ class McuClient:
 
     def transact(self, name: str, cmd_set: int, cmd_id: int, payload: bytes = b"", timeout: float = 6.0) -> Dict[str, Any]:
         with self._lock:
-            self.open()
-            assert self._ser is not None
-            packet = build_packet(self._seq, cmd_set, cmd_id, payload)
-            self._seq = (self._seq + 1) & 0xFFFF
-
             messages: List[str] = []
-            self._ser.reset_input_buffer()
             start = time.monotonic()
-            self.logger.info(
-                "mcu tx name=%s cmd=%s payload=%s",
-                name,
-                command_label(cmd_set, cmd_id),
-                decode_tx_payload(cmd_set, cmd_id, payload),
-            )
-            self._ser.write(packet)
-            self._ser.flush()
+            try:
+                self.open()
+                assert self._ser is not None
+                packet = build_packet(self._seq, cmd_set, cmd_id, payload)
+                self._seq = (self._seq + 1) & 0xFFFF
 
-            deadline = time.monotonic() + timeout
-            while time.monotonic() < deadline:
-                frame = read_packet(self._ser, deadline)
-                if frame is None:
-                    break
-                msg = packet_message(frame)
-                if msg:
-                    messages.append(msg)
-                    self.last_messages.append(msg)
-                    self.last_messages = self.last_messages[-80:]
-                    self.logger.info("mcu: %s", msg)
-                if frame["cmd_set"] == cmd_set and frame["cmd_id"] == cmd_id and frame["cmd_type"] == 0:
-                    data = frame["data"]
-                    elapsed_ms = (time.monotonic() - start) * 1000.0
-                    self.logger.info(
-                        "mcu rx name=%s cmd=%s elapsed=%.1fms data=%s",
-                        name,
-                        command_label(cmd_set, cmd_id),
-                        elapsed_ms,
-                        decode_rx_summary(cmd_set, cmd_id, data),
-                    )
-                    return {
-                        "ok": True,
-                        "name": name,
-                        "cmd_set": cmd_set,
-                        "cmd_id": cmd_id,
-                        "data": data,
-                        "data_hex": data.hex(),
-                        "result": data[0] if data else None,
-                        "messages": messages,
-                    }
+                self._ser.reset_input_buffer()
+                self.logger.info(
+                    "mcu tx name=%s cmd=%s payload=%s",
+                    name,
+                    command_label(cmd_set, cmd_id),
+                    decode_tx_payload(cmd_set, cmd_id, payload),
+                )
+                self._ser.write(packet)
+                self._ser.flush()
+
+                deadline = time.monotonic() + timeout
+                while time.monotonic() < deadline:
+                    frame = read_packet(self._ser, deadline)
+                    if frame is None:
+                        break
+                    msg = packet_message(frame)
+                    if msg:
+                        messages.append(msg)
+                        self.last_messages.append(msg)
+                        self.last_messages = self.last_messages[-80:]
+                        self.logger.info("mcu: %s", msg)
+                    if frame["cmd_set"] == cmd_set and frame["cmd_id"] == cmd_id and frame["cmd_type"] == 0:
+                        data = frame["data"]
+                        elapsed_ms = (time.monotonic() - start) * 1000.0
+                        self.logger.info(
+                            "mcu rx name=%s cmd=%s elapsed=%.1fms data=%s",
+                            name,
+                            command_label(cmd_set, cmd_id),
+                            elapsed_ms,
+                            decode_rx_summary(cmd_set, cmd_id, data),
+                        )
+                        return {
+                            "ok": True,
+                            "name": name,
+                            "cmd_set": cmd_set,
+                            "cmd_id": cmd_id,
+                            "data": data,
+                            "data_hex": data.hex(),
+                            "result": data[0] if data else None,
+                            "messages": messages,
+                        }
+            except (serial.SerialException, OSError) as exc:
+                elapsed_ms = (time.monotonic() - start) * 1000.0
+                self._drop_serial_locked(f"{name} serial error")
+                self.logger.error(
+                    "mcu serial error name=%s cmd=%s elapsed=%.1fms error=%s",
+                    name,
+                    command_label(cmd_set, cmd_id),
+                    elapsed_ms,
+                    exc,
+                )
+                return {
+                    "ok": False,
+                    "name": name,
+                    "cmd_set": cmd_set,
+                    "cmd_id": cmd_id,
+                    "error": f"serial error: {exc}",
+                    "messages": messages,
+                }
 
             elapsed_ms = (time.monotonic() - start) * 1000.0
             self.logger.warning(
@@ -1440,6 +1472,7 @@ class McuClient:
                 elapsed_ms,
                 decode_tx_payload(cmd_set, cmd_id, payload),
             )
+            self._drop_serial_locked(f"{name} ack timeout")
             return {
                 "ok": False,
                 "name": name,
