@@ -143,7 +143,7 @@ Global options:
 
 These commands are RK-side wrappers around the low-level trapezoid command.
 The new linked mechanics use one motor only. The RK daemon fills the configured
-open/close target position, max speed, and acceleration, then sends
+open/close target position plus independent max speed and acceleration, then sends
 `motor_trapezoid` to the MCU. By default the CLI returns after the MCU accepts
 the target. Add `--wait` to wait for motion completion, or `--timeout <seconds>`
 to change the wait timeout.

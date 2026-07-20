@@ -51,8 +51,10 @@ CMD_ID_INTERCEPTOR_SWITCH_STATUS = 21
 
 DOOR_OPEN_POSITION_0P1DEG = 12000
 DOOR_CLOSE_POSITION_0P1DEG = 437000
-DOOR_MOTION_SPEED_0P1RPM = 15000
-DOOR_MOTION_ACCEL_RPM_S = 2000
+DOOR_OPEN_SPEED_0P1RPM = 15000
+DOOR_OPEN_ACCEL_RPM_S = 2000
+DOOR_CLOSE_SPEED_0P1RPM = 15000
+DOOR_CLOSE_ACCEL_RPM_S = 2000
 RK_OBSERVED_REACHED_TOLERANCE_0P1DEG = 20
 MOTION_EVENT_BACKLOG = 200
 MOTION_ASYNC_TIMEOUT_S = 30.0
@@ -1728,8 +1730,8 @@ class McuClient:
         return self._send_motor_trapezoid(
             "door_open",
             DOOR_OPEN_POSITION_0P1DEG,
-            DOOR_MOTION_SPEED_0P1RPM,
-            DOOR_MOTION_ACCEL_RPM_S,
+            DOOR_OPEN_SPEED_0P1RPM,
+            DOOR_OPEN_ACCEL_RPM_S,
             wait,
             timeout,
         )
@@ -1738,8 +1740,8 @@ class McuClient:
         return self._send_motor_trapezoid(
             "door_close",
             DOOR_CLOSE_POSITION_0P1DEG,
-            DOOR_MOTION_SPEED_0P1RPM,
-            DOOR_MOTION_ACCEL_RPM_S,
+            DOOR_CLOSE_SPEED_0P1RPM,
+            DOOR_CLOSE_ACCEL_RPM_S,
             wait,
             timeout,
         )
