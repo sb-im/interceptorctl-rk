@@ -841,7 +841,7 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 硬件映射：
 - `PSW1` / `PD15`：`platform_switch`，兼容字段为 `top`
 - `PSW2` / `PD14`：`charge_base_switch`，兼容字段为 `bottom`
-- `PSW3` / `PD13`：`cover_button`，兼容字段为 `button`
+- `PSW3` / `PD13`：`cover_button`
 
 请求：
 ```json
@@ -855,7 +855,6 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
   "switches": {
     "top": false,
     "bottom": false,
-    "button": false,
     "cover_button": false,
     "platform_switch": false,
     "charge_base_switch": false,
@@ -871,7 +870,7 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 }
 ```
 
-`active_mask`：bit0=PSW1/TOP，bit1=PSW2/BOT，bit2=PSW3/button，bit=1 表示 active。`raw_level_mask` 是未做 active-low 转换的原始 GPIO 电平，bit=1 表示高电平。`manual_action_name` 取值为 `none`、`manual_opening`、`manual_closing`。
+`active_mask`：bit0=PSW1/TOP，bit1=PSW2/BOT，bit2=PSW3/cover_button，bit=1 表示 active。`raw_level_mask` 是未做 active-low 转换的原始 GPIO 电平，bit=1 表示高电平。`manual_action_name` 取值为 `none`、`manual_opening`、`manual_closing`。
 
 ## 14. 空调
 

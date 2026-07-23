@@ -272,7 +272,6 @@ def print_switches(switches: Dict[str, Any]) -> None:
         "switches: "
         f"top={switches.get('top')} "
         f"bottom={switches.get('bottom')} "
-        f"button={switches.get('button')} "
         f"cover_button={switches.get('cover_button')} "
         f"platform_switch={switches.get('platform_switch')} "
         f"charge_base_switch={switches.get('charge_base_switch')} "
@@ -640,12 +639,11 @@ notes:
             group_sub.add_parser(color, help=f"set {group} to {color}")
 
     for area, help_text in (
-        ("switch", "read PSW1/PSW2/PSW3 top/bottom/button inputs"),
-        ("button", "compatibility alias for switch status"),
+        ("switch", "read PSW1/PSW2/PSW3 switch inputs"),
     ):
         switch = sub.add_parser(area, help=help_text)
         switch_sub = switch.add_subparsers(dest="action", required=True)
-        switch_sub.add_parser("status", help="read active-low switch/button inputs")
+        switch_sub.add_parser("status", help="read active-low switch inputs")
 
     ac = sub.add_parser("ac", help="HCNC4A air-conditioner UART5 RS485 commands")
     ac_sub = ac.add_subparsers(dest="action", required=True)
@@ -801,7 +799,7 @@ def command_from_args(args: argparse.Namespace) -> tuple[str, Dict[str, Any]]:
         if args.target == "all":
             return "led_set", {"group": "all", "color": args.color}
         return "led_set", {"group": args.target, "color": args.color}
-    if args.area in {"switch", "button"}:
+    if args.area == "switch":
         if args.action == "status":
             return "switch_status", {}
     if args.area == "ac":

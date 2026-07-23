@@ -347,7 +347,6 @@ int main() {
     }
     std::cout << "  top=" << std::boolalpha << switches.top
               << " bottom=" << switches.bottom
-              << " button=" << switches.button
               << " cover_button=" << switches.cover_button
               << " platform_switch=" << switches.platform_switch
               << " charge_base_switch=" << switches.charge_base_switch

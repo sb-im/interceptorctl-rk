@@ -42,7 +42,7 @@
  * - LED output mask: bit field, bit0=JC_R, bit1=JC_G, bit2=CD_R,
  *   bit3=CD_G, bit4=WZ_R, bit5=WZ_G, bit6=DP_R, bit7=DP_G.
  * - Switch inputs: active-low, PSW1/PD15=top, PSW2/PD14=bottom,
- *   PSW3/PD13=button.
+ *   PSW3/PD13=cover_button.
  */
 
 #include <cstdint>
@@ -532,10 +532,7 @@ struct SwitchStatus {
     /** @brief true when the BOT microswitch input PSW2/PD14 is active low. */
     bool bottom = false;
 
-    /** @brief true when the user push button input PSW3/PD13 is active low. */
-    bool button = false;
-
-    /** @brief Same as button, named by customer-facing function. */
+    /** @brief true when the cover open/close push button input PSW3/PD13 is active low. */
     bool cover_button = false;
 
     /** @brief Same as top, named by customer-facing function. */
@@ -550,10 +547,10 @@ struct SwitchStatus {
     /** @brief Same as bottom, named by board signal. */
     bool psw2 = false;
 
-    /** @brief Same as button, named by board signal. */
+    /** @brief Same as cover_button, named by board signal. */
     bool psw3 = false;
 
-    /** @brief Active mask, bit0=PSW1/TOP, bit1=PSW2/BOT, bit2=PSW3/button. */
+    /** @brief Active mask, bit0=PSW1/TOP, bit1=PSW2/BOT, bit2=PSW3/cover_button. */
     int active_mask = 0;
 
     /**

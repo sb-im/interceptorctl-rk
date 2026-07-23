@@ -603,7 +603,6 @@ void parse_switch_data(const Json& root, SwitchStatus& out) {
     }
     out.top = get_bool(member(*switches, "top"));
     out.bottom = get_bool(member(*switches, "bottom"));
-    out.button = get_bool(member(*switches, "button"));
     out.cover_button = get_bool(member(*switches, "cover_button"));
     out.platform_switch = get_bool(member(*switches, "platform_switch"));
     out.charge_base_switch = get_bool(member(*switches, "charge_base_switch"));

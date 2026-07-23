@@ -247,14 +247,13 @@ power supply at Modbus address `0x01`.
 
 ```bash
 ./interceptorctl switch status
-./interceptorctl button status
 ```
 
 These commands read the active-low PSW1/PSW2/PSW3 GPIO inputs:
 
 - `PSW1` / `PD15`: `platform_switch` (`top` compatibility field)
 - `PSW2` / `PD14`: `charge_base_switch` (`bottom` compatibility field)
-- `PSW3` / `PD13`: `cover_button` (`button` compatibility field)
+- `PSW3` / `PD13`: `cover_button`
 
 The semantic fields are `true` when the switch pulls the input to GND.
 `raw_level_mask` keeps the raw GPIO level before active-low conversion:

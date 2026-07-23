@@ -494,15 +494,15 @@ def parse_switch_status(data: bytes) -> Dict[str, Any]:
     if len(data) < 5:
         return {"raw": data.hex(), "parse_error": "switch status payload too short"}
 
-    top, bottom, button, active_mask, raw_level_mask = struct.unpack_from("<BBBBB", data, 0)
+    top, bottom, cover_button, active_mask, raw_level_mask = struct.unpack_from("<BBBBB", data, 0)
     manual_action = data[5] if len(data) >= 6 else 0
     return {
         "top": bool(top),
         "bottom": bool(bottom),
-        "button": bool(button),
+        "cover_button": bool(cover_button),
         "psw1": bool(top),
         "psw2": bool(bottom),
-        "psw3": bool(button),
+        "psw3": bool(cover_button),
         "active_mask": active_mask,
         "raw_level_mask": raw_level_mask,
         "manual_action": manual_action,
@@ -869,8 +869,7 @@ def public_switches(switches: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "top": switches.get("top"),
         "bottom": switches.get("bottom"),
-        "button": switches.get("button"),
-        "cover_button": switches.get("button"),
+        "cover_button": switches.get("cover_button"),
         "platform_switch": switches.get("top"),
         "charge_base_switch": switches.get("bottom"),
         "psw1": switches.get("psw1"),
