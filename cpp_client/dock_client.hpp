@@ -515,9 +515,9 @@ struct LedStatus {
  * @brief Active-low PSW1/PSW2/PSW3 switch input status.
  *
  * Hardware mapping:
- * - PSW1 / PD15: top microswitch.
- * - PSW2 / PD14: bottom microswitch.
- * - PSW3 / PD13: user push button.
+ * - PSW1 / PD15: platform microswitch.
+ * - PSW2 / PD14: charge-base microswitch.
+ * - PSW3 / PD13: cover open/close push button.
  *
  * The switches short the input to GND. Therefore the semantic boolean fields
  * are true when the corresponding input is low.
@@ -535,6 +535,15 @@ struct SwitchStatus {
     /** @brief true when the user push button input PSW3/PD13 is active low. */
     bool button = false;
 
+    /** @brief Same as button, named by customer-facing function. */
+    bool cover_button = false;
+
+    /** @brief Same as top, named by customer-facing function. */
+    bool platform_switch = false;
+
+    /** @brief Same as bottom, named by customer-facing function. */
+    bool charge_base_switch = false;
+
     /** @brief Same as top, named by board signal. */
     bool psw1 = false;
 
@@ -546,6 +555,20 @@ struct SwitchStatus {
 
     /** @brief Active mask, bit0=PSW1/TOP, bit1=PSW2/BOT, bit2=PSW3/button. */
     int active_mask = 0;
+
+    /**
+     * @brief MCU manual cover action name.
+     *
+     * Values:
+     * - "none": no manual button-triggered cover action is active.
+     * - "manual_opening": MCU is opening the cover due to the physical button
+     *   or emergency-stop release.
+     * - "manual_closing": MCU is closing the cover due to the physical button.
+     */
+    std::string manual_action = "none";
+
+    /** @brief Raw MCU manual action code. 0=none, 1=manual_opening, 2=manual_closing. */
+    int manual_action_code = 0;
 
     /**
      * @brief Raw GPIO level mask, bit=1 means high level before active-low conversion.

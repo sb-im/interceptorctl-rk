@@ -189,7 +189,7 @@ ls -l /tmp/interceptorctl.sock
 | `power_on` | `{}` | 打开电源输出。 |
 | `power_off` | `{}` | 关闭电源输出。 |
 | `led_set` | `{"group":"wz","color":"red"}` 或 `{"mask":16}` | 设置 TCA9554 LED 输出。 |
-| `switch_status` | `{}` | 读取 PSW1/PSW2/PSW3 active-low 输入，分别对应 `top`、`bottom`、`button`。 |
+| `switch_status` | `{}` | 读取 PSW1/PSW2/PSW3 active-low 输入，并返回 MCU 手动开/关盖状态。 |
 | `ac_control` | `{"action":"remote_power","value":1,"wait":true,"timeout":3}` | HCNC4A 空调控制。`action` 支持 `remote_power`、`force_cool`、`force_heat`、`run_mode`、`humidity`、`cool_start_temp`、`cool_diff`、`heat_start_temp`、`heat_diff`、`dehumid_setpoint`。 |
 | `aircraft_read` | `{"timeout_ms":500,"max_len":80}` | 被动读取飞机 UART4 485 主动上报原始字节。 |
 | `aircraft_transfer` | `{"tx_hex":"0102030d","timeout_ms":1000,"idle_ms":30}` | 飞机 UART4 485 请求-响应透传。 |
@@ -836,12 +836,12 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 
 ### switch_status
 
-`switch_status` 读取 PSW1/PSW2/PSW3 三路 active-low GPIO 输入。该接口只上报状态，不参与 MCU 运动控制逻辑，客户 App 可自行决定如何使用这些到位信号。
+`switch_status` 读取 PSW1/PSW2/PSW3 三路 active-low GPIO 输入，并返回 MCU 侧按钮触发的手动开/关盖状态。
 
 硬件映射：
-- `PSW1` / `PD15`：`top`
-- `PSW2` / `PD14`：`bottom`
-- `PSW3` / `PD13`：`button`
+- `PSW1` / `PD15`：`platform_switch`，兼容字段为 `top`
+- `PSW2` / `PD14`：`charge_base_switch`，兼容字段为 `bottom`
+- `PSW3` / `PD13`：`cover_button`，兼容字段为 `button`
 
 请求：
 ```json
@@ -856,17 +856,22 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
     "top": false,
     "bottom": false,
     "button": false,
+    "cover_button": false,
+    "platform_switch": false,
+    "charge_base_switch": false,
     "psw1": false,
     "psw2": false,
     "psw3": false,
     "active_mask": 0,
     "raw_level_mask": 7,
+    "manual_action": 0,
+    "manual_action_name": "none",
     "active_low": true
   }
 }
 ```
 
-`active_mask`：bit0=PSW1/TOP，bit1=PSW2/BOT，bit2=PSW3/button，bit=1 表示 active。`raw_level_mask` 是未做 active-low 转换的原始 GPIO 电平，bit=1 表示高电平。
+`active_mask`：bit0=PSW1/TOP，bit1=PSW2/BOT，bit2=PSW3/button，bit=1 表示 active。`raw_level_mask` 是未做 active-low 转换的原始 GPIO 电平，bit=1 表示高电平。`manual_action_name` 取值为 `none`、`manual_opening`、`manual_closing`。
 
 ## 14. 空调
 

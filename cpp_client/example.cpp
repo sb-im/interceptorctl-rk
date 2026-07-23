@@ -348,6 +348,10 @@ int main() {
     std::cout << "  top=" << std::boolalpha << switches.top
               << " bottom=" << switches.bottom
               << " button=" << switches.button
+              << " cover_button=" << switches.cover_button
+              << " platform_switch=" << switches.platform_switch
+              << " charge_base_switch=" << switches.charge_base_switch
+              << " manual_action=" << switches.manual_action
               << " psw1=" << switches.psw1
               << " psw2=" << switches.psw2
               << " psw3=" << switches.psw3
@@ -355,8 +359,9 @@ int main() {
               << " raw_level_mask=" << hex8(switches.raw_level_mask)
               << " active_low=" << switches.active_low
               << "\n";
-    std::cout << "  mapping: PSW1/PD15=top, PSW2/PD14=bottom, PSW3/PD13=button.\n";
+    std::cout << "  mapping: PSW1/PD15=platform_switch, PSW2/PD14=charge_base_switch, PSW3/PD13=cover_button.\n";
     std::cout << "  active-low rule: semantic fields are true when the input is pulled to GND.\n";
+    std::cout << "  manual_action values: none, manual_opening, manual_closing.\n";
 
     print_section("Air Conditioner");
     auto ac = dock.air_conditioner_status();

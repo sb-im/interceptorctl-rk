@@ -75,12 +75,14 @@ int main() {
 
     auto switches = dock.switch_status();
     if (switches.result.ok) {
-        bool top_active = switches.top;
-        bool bottom_active = switches.bottom;
-        bool button_active = switches.button;
-        (void)top_active;
-        (void)bottom_active;
-        (void)button_active;
+        bool platform_active = switches.platform_switch;
+        bool charge_base_active = switches.charge_base_switch;
+        bool cover_button_active = switches.cover_button;
+        std::string manual_action = switches.manual_action;
+        (void)platform_active;
+        (void)charge_base_active;
+        (void)cover_button_active;
+        (void)manual_action;
     }
 
     auto ac = dock.air_conditioner_status();
@@ -132,9 +134,11 @@ Important conventions:
 - `led_set_group()` sets one red/green group (`Jc`, `Cd`, `Wz`, `Dp`, or
   `All`) to `Off`, `Red`, `Green`, or `Both`.
 - `switch_status()` reads the active-low PSW1/PSW2/PSW3 inputs. PSW1/PD15 is
-  the top microswitch, PSW2/PD14 is the bottom microswitch, and PSW3/PD13 is
-  the user push button. The semantic fields are true when the input is pulled
-  low by the switch.
+  exposed as `platform_switch`, PSW2/PD14 as `charge_base_switch`, and
+  PSW3/PD13 as `cover_button`. The semantic fields are true when the input is
+  pulled low by the switch. `manual_action` is `"none"`,
+  `"manual_opening"`, or `"manual_closing"` and reports MCU-side cover button
+  handling.
 - `air_conditioner_status()` reads HCNC4A air-conditioner status cached by the
   MCU UART5 plaintext Modbus state machine.
 - Air-conditioner temperature unit is `0.1C`; DC voltage/current units are

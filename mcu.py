@@ -107,6 +107,14 @@ ACTION_NAMES = {
     1: "door_open",
     2: "door_close",
     5: "door_move",
+    7: "manual_opening",
+    8: "manual_closing",
+}
+
+MANUAL_ACTION_NAMES = {
+    0: "none",
+    1: "manual_opening",
+    2: "manual_closing",
 }
 
 STATE_NAMES = {
@@ -487,6 +495,7 @@ def parse_switch_status(data: bytes) -> Dict[str, Any]:
         return {"raw": data.hex(), "parse_error": "switch status payload too short"}
 
     top, bottom, button, active_mask, raw_level_mask = struct.unpack_from("<BBBBB", data, 0)
+    manual_action = data[5] if len(data) >= 6 else 0
     return {
         "top": bool(top),
         "bottom": bool(bottom),
@@ -496,8 +505,10 @@ def parse_switch_status(data: bytes) -> Dict[str, Any]:
         "psw3": bool(button),
         "active_mask": active_mask,
         "raw_level_mask": raw_level_mask,
+        "manual_action": manual_action,
+        "manual_action_name": MANUAL_ACTION_NAMES.get(manual_action, f"unknown_{manual_action}"),
         "active_low": True,
-        "raw": data[:5].hex(),
+        "raw": data[:6].hex(),
     }
 
 
@@ -859,11 +870,16 @@ def public_switches(switches: Dict[str, Any]) -> Dict[str, Any]:
         "top": switches.get("top"),
         "bottom": switches.get("bottom"),
         "button": switches.get("button"),
+        "cover_button": switches.get("button"),
+        "platform_switch": switches.get("top"),
+        "charge_base_switch": switches.get("bottom"),
         "psw1": switches.get("psw1"),
         "psw2": switches.get("psw2"),
         "psw3": switches.get("psw3"),
         "active_mask": switches.get("active_mask"),
         "raw_level_mask": switches.get("raw_level_mask"),
+        "manual_action": switches.get("manual_action"),
+        "manual_action_name": switches.get("manual_action_name"),
         "active_low": switches.get("active_low"),
     }
 

@@ -252,13 +252,15 @@ power supply at Modbus address `0x01`.
 
 These commands read the active-low PSW1/PSW2/PSW3 GPIO inputs:
 
-- `PSW1` / `PD15`: `top`
-- `PSW2` / `PD14`: `bottom`
-- `PSW3` / `PD13`: `button`
+- `PSW1` / `PD15`: `platform_switch` (`top` compatibility field)
+- `PSW2` / `PD14`: `charge_base_switch` (`bottom` compatibility field)
+- `PSW3` / `PD13`: `cover_button` (`button` compatibility field)
 
 The semantic fields are `true` when the switch pulls the input to GND.
 `raw_level_mask` keeps the raw GPIO level before active-low conversion:
 bit0=PSW1, bit1=PSW2, bit2=PSW3, and bit=1 means high level.
+`manual_action_name` is `none`, `manual_opening`, or `manual_closing` and
+reports MCU-side cover-button handling.
 
 ### Air Conditioner
 
