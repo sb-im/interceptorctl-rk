@@ -362,7 +362,7 @@ int main() {
               << " raw_level_mask=" << hex8(switches.raw_level_mask)
               << " active_low=" << switches.active_low
               << "\n";
-    std::cout << "  mapping: PSW1/PD15=aircraft_position_switch, PSW2/PD14=module_reached_switch, "
+    std::cout << "  mapping: PSW1/PD15=module_reached_switch, PSW2/PD14=aircraft_position_switch, "
               << "PSW3/PD13=cover_button, PSW4/PD12=aircraft_present_switch.\n";
     std::cout << "  active-low rule: semantic fields are true when the input is pulled to GND.\n";
     std::cout << "  manual_action values: none, manual_opening, manual_closing.\n";

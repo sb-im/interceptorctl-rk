@@ -71,7 +71,7 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 
 空调 `ac_control` 目前支持远程开关、强制制冷/加热、正常/静音模式、监控湿度下发，以及制冷启动温度、制冷回差、加热启动温度、加热回差、除湿设定点写入。写入后用 `ac_status` 回读确认实际寄存器值。
 
-`switch_status` 用于读取 PSW1/PSW2/PSW3/PSW4 active-low 输入：PSW1/PD15=`aircraft_position_switch`，PSW2/PD14=`module_reached_switch`，PSW3/PD13=`cover_button`，PSW4/PD12=`aircraft_present_switch`。这些信号只上报给客户 App 层，不参与 MCU 运动控制逻辑。
+`switch_status` 用于读取 PSW1/PSW2/PSW3/PSW4 active-low 输入：PSW1/PD15=`module_reached_switch`，PSW2/PD14=`aircraft_position_switch`，PSW3/PD13=`cover_button`，PSW4/PD12=`aircraft_present_switch`。这些信号只上报给客户 App 层，不参与 MCU 运动控制逻辑。
 
 ## 4. 急停接口
 

@@ -41,8 +41,8 @@
  * - Air-conditioner DC voltage/current: 0.1 V / 0.1 A.
  * - LED output mask: bit field, bit0=JC_R, bit1=JC_G, bit2=CD_R,
  *   bit3=CD_G, bit4=WZ_R, bit5=WZ_G, bit6=DP_R, bit7=DP_G.
- * - Switch inputs: active-low, PSW1/PD15=aircraft_position_switch,
- *   PSW2/PD14=module_reached_switch, PSW3/PD13=cover_button,
+ * - Switch inputs: active-low, PSW1/PD15=module_reached_switch,
+ *   PSW2/PD14=aircraft_position_switch, PSW3/PD13=cover_button,
  *   PSW4/PD12=aircraft_present_switch.
  */
 
@@ -516,8 +516,8 @@ struct LedStatus {
  * @brief Active-low PSW1/PSW2/PSW3/PSW4 switch input status.
  *
  * Hardware mapping:
- * - PSW1 / PD15: aircraft position microswitch.
- * - PSW2 / PD14: module reached microswitch.
+ * - PSW1 / PD15: module reached microswitch.
+ * - PSW2 / PD14: aircraft position microswitch.
  * - PSW3 / PD13: cover open/close push button.
  * - PSW4 / PD12: aircraft present microswitch.
  *
@@ -537,10 +537,10 @@ struct SwitchStatus {
     /** @brief true when the cover open/close push button input PSW3/PD13 is active low. */
     bool cover_button = false;
 
-    /** @brief true when the aircraft-position input PSW1/PD15 is active low. */
+    /** @brief true when the aircraft-position input PSW2/PD14 is active low. */
     bool aircraft_position_switch = false;
 
-    /** @brief true when the module-reached input PSW2/PD14 is active low. */
+    /** @brief true when the module-reached input PSW1/PD15 is active low. */
     bool module_reached_switch = false;
 
     /** @brief true when the aircraft-present input PSW4/PD12 is active low. */

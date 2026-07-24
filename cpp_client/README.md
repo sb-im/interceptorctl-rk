@@ -136,8 +136,8 @@ Important conventions:
 - `led_set_group()` sets one red/green group (`Jc`, `Cd`, `Wz`, `Dp`, or
   `All`) to `Off`, `Red`, `Green`, or `Both`.
 - `switch_status()` reads the active-low PSW1/PSW2/PSW3/PSW4 inputs.
-  PSW1/PD15 is exposed as `aircraft_position_switch`, PSW2/PD14 as
-  `module_reached_switch`, PSW3/PD13 as `cover_button`, and PSW4/PD12 as
+  PSW1/PD15 is exposed as `module_reached_switch`, PSW2/PD14 as
+  `aircraft_position_switch`, PSW3/PD13 as `cover_button`, and PSW4/PD12 as
   `aircraft_present_switch`. The semantic fields are true when the input is
   pulled low by the switch. `manual_action` is `"none"`,
   `"manual_opening"`, or `"manual_closing"` and reports MCU-side cover button

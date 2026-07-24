@@ -839,8 +839,8 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 `switch_status` 读取 PSW1/PSW2/PSW3/PSW4 四路 active-low GPIO 输入，并返回 MCU 侧按钮触发的手动开/关盖状态。
 
 硬件映射：
-- `PSW1` / `PD15`：`aircraft_position_switch`，兼容字段为 `top`
-- `PSW2` / `PD14`：`module_reached_switch`，兼容字段为 `bottom`
+- `PSW1` / `PD15`：`module_reached_switch`，兼容字段为 `top`
+- `PSW2` / `PD14`：`aircraft_position_switch`，兼容字段为 `bottom`
 - `PSW3` / `PD13`：`cover_button`
 - `PSW4` / `PD12`：`aircraft_present_switch`
 

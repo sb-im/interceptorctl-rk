@@ -251,8 +251,8 @@ power supply at Modbus address `0x01`.
 
 These commands read the active-low PSW1/PSW2/PSW3/PSW4 GPIO inputs:
 
-- `PSW1` / `PD15`: `aircraft_position_switch`
-- `PSW2` / `PD14`: `module_reached_switch`
+- `PSW1` / `PD15`: `module_reached_switch`
+- `PSW2` / `PD14`: `aircraft_position_switch`
 - `PSW3` / `PD13`: `cover_button`
 - `PSW4` / `PD12`: `aircraft_present_switch`
 
