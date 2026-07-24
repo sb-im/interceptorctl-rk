@@ -524,10 +524,11 @@ struct LedStatus {
  * The switches short the input to GND. Therefore the semantic boolean fields
  * are true when the corresponding input is low.
  *
- * A cover-button request to close is accepted only when PSW2 and PSW4 are
- * both active at the trigger instant. The MCU does not continuously monitor
- * them after the close motion starts. PSW1 is status-only and is not part of
- * this condition.
+ * A cover-button request to close is accepted when PSW2 and PSW4 have the
+ * same state: both active or both inactive. The request is blocked when
+ * exactly one input is active. The MCU does not continuously monitor them
+ * after the close motion starts. PSW1 is status-only and is not part of this
+ * condition.
  */
 struct SwitchStatus {
     /** @brief Common call result. Check result.ok first. */

@@ -141,10 +141,11 @@ Important conventions:
   `aircraft_present_switch`. The semantic fields are true when the input is
   pulled low by the switch. `manual_action` is `"none"`,
   `"manual_opening"`, or `"manual_closing"` and reports MCU-side cover button
-  handling. A cover-button request to close is accepted only when PSW2 and
-  PSW4 are both active at the trigger instant. The MCU does not keep checking
-  them after motion starts. PSW1 is status-only and does not participate in
-  this condition.
+  handling. A cover-button request to close is accepted when PSW2 and PSW4
+  have the same state: both active or both inactive. The request is blocked
+  when exactly one input is active. The MCU does not keep checking them after
+  motion starts. PSW1 is status-only and does not participate in this
+  condition.
 - `air_conditioner_status()` reads HCNC4A air-conditioner status cached by the
   MCU UART5 plaintext Modbus state machine.
 - Air-conditioner temperature unit is `0.1C`; DC voltage/current units are
