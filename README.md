@@ -262,6 +262,13 @@ bit0=PSW1, bit1=PSW2, bit2=PSW3, bit3=PSW4, and bit=1 means high level.
 `manual_action_name` is `none`, `manual_opening`, or `manual_closing` and
 reports MCU-side cover-button handling.
 
+When the cover button requests a manual close, the MCU accepts the request
+only if both `aircraft_position_switch` (PSW2) and
+`aircraft_present_switch` (PSW4) are active. The two inputs are sampled only
+when the button triggers the close; changing them after motion starts does not
+stop the motion. `module_reached_switch` (PSW1) is status-only and is not part
+of this close interlock.
+
 ### Air Conditioner
 
 ```bash

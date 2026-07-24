@@ -844,6 +844,12 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 - `PSW3` / `PD13`：`cover_button`
 - `PSW4` / `PD12`：`aircraft_present_switch`
 
+按钮触发手动关盖时，MCU 只在触发瞬间检查 `aircraft_position_switch`
+（PSW2）与 `aircraft_present_switch`（PSW4）是否同时为 `true`。条件满足后
+运动继续执行，即使任一开关随后释放也不会因此停止。`module_reached_switch`
+（PSW1）只用于状态上报，不参与该关盖条件。RK 下发的 `door_close` API 不受
+此按钮触发条件限制。
+
 请求：
 ```json
 {"cmd":"switch_status","args":{}}

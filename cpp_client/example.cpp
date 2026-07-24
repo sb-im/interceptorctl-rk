@@ -365,6 +365,7 @@ int main() {
     std::cout << "  mapping: PSW1/PD15=module_reached_switch, PSW2/PD14=aircraft_position_switch, "
               << "PSW3/PD13=cover_button, PSW4/PD12=aircraft_present_switch.\n";
     std::cout << "  active-low rule: semantic fields are true when the input is pulled to GND.\n";
+    std::cout << "  manual close trigger: PSW2 and PSW4 must both be active; PSW1 is status-only.\n";
     std::cout << "  manual_action values: none, manual_opening, manual_closing.\n";
 
     print_section("Air Conditioner");
