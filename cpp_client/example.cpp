@@ -348,17 +348,22 @@ int main() {
     std::cout << "  top=" << std::boolalpha << switches.top
               << " bottom=" << switches.bottom
               << " cover_button=" << switches.cover_button
+              << " aircraft_position_switch=" << switches.aircraft_position_switch
+              << " module_reached_switch=" << switches.module_reached_switch
+              << " aircraft_present_switch=" << switches.aircraft_present_switch
               << " platform_switch=" << switches.platform_switch
               << " charge_base_switch=" << switches.charge_base_switch
               << " manual_action=" << switches.manual_action
               << " psw1=" << switches.psw1
               << " psw2=" << switches.psw2
               << " psw3=" << switches.psw3
+              << " psw4=" << switches.psw4
               << " active_mask=" << hex8(switches.active_mask)
               << " raw_level_mask=" << hex8(switches.raw_level_mask)
               << " active_low=" << switches.active_low
               << "\n";
-    std::cout << "  mapping: PSW1/PD15=platform_switch, PSW2/PD14=charge_base_switch, PSW3/PD13=cover_button.\n";
+    std::cout << "  mapping: PSW1/PD15=aircraft_position_switch, PSW2/PD14=module_reached_switch, "
+              << "PSW3/PD13=cover_button, PSW4/PD12=aircraft_present_switch.\n";
     std::cout << "  active-low rule: semantic fields are true when the input is pulled to GND.\n";
     std::cout << "  manual_action values: none, manual_opening, manual_closing.\n";
 

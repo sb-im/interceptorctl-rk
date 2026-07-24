@@ -189,7 +189,7 @@ ls -l /tmp/interceptorctl.sock
 | `power_on` | `{}` | 打开电源输出。 |
 | `power_off` | `{}` | 关闭电源输出。 |
 | `led_set` | `{"group":"wz","color":"red"}` 或 `{"mask":16}` | 设置 TCA9554 LED 输出。 |
-| `switch_status` | `{}` | 读取 PSW1/PSW2/PSW3 active-low 输入，并返回 MCU 手动开/关盖状态。 |
+| `switch_status` | `{}` | 读取 PSW1/PSW2/PSW3/PSW4 active-low 输入，并返回 MCU 手动开/关盖状态。 |
 | `ac_control` | `{"action":"remote_power","value":1,"wait":true,"timeout":3}` | HCNC4A 空调控制。`action` 支持 `remote_power`、`force_cool`、`force_heat`、`run_mode`、`humidity`、`cool_start_temp`、`cool_diff`、`heat_start_temp`、`heat_diff`、`dehumid_setpoint`。 |
 | `aircraft_read` | `{"timeout_ms":500,"max_len":80}` | 被动读取飞机 UART4 485 主动上报原始字节。 |
 | `aircraft_transfer` | `{"tx_hex":"0102030d","timeout_ms":1000,"idle_ms":30}` | 飞机 UART4 485 请求-响应透传。 |
@@ -836,12 +836,13 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 
 ### switch_status
 
-`switch_status` 读取 PSW1/PSW2/PSW3 三路 active-low GPIO 输入，并返回 MCU 侧按钮触发的手动开/关盖状态。
+`switch_status` 读取 PSW1/PSW2/PSW3/PSW4 四路 active-low GPIO 输入，并返回 MCU 侧按钮触发的手动开/关盖状态。
 
 硬件映射：
-- `PSW1` / `PD15`：`platform_switch`，兼容字段为 `top`
-- `PSW2` / `PD14`：`charge_base_switch`，兼容字段为 `bottom`
+- `PSW1` / `PD15`：`aircraft_position_switch`，兼容字段为 `top`
+- `PSW2` / `PD14`：`module_reached_switch`，兼容字段为 `bottom`
 - `PSW3` / `PD13`：`cover_button`
+- `PSW4` / `PD12`：`aircraft_present_switch`
 
 请求：
 ```json
@@ -856,11 +857,15 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
     "top": false,
     "bottom": false,
     "cover_button": false,
+    "aircraft_position_switch": false,
+    "module_reached_switch": false,
+    "aircraft_present_switch": false,
     "platform_switch": false,
     "charge_base_switch": false,
     "psw1": false,
     "psw2": false,
     "psw3": false,
+    "psw4": false,
     "active_mask": 0,
     "raw_level_mask": 7,
     "manual_action": 0,
@@ -870,7 +875,7 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 }
 ```
 
-`active_mask`：bit0=PSW1/TOP，bit1=PSW2/BOT，bit2=PSW3/cover_button，bit=1 表示 active。`raw_level_mask` 是未做 active-low 转换的原始 GPIO 电平，bit=1 表示高电平。`manual_action_name` 取值为 `none`、`manual_opening`、`manual_closing`。
+`active_mask`：bit0=PSW1，bit1=PSW2，bit2=PSW3，bit3=PSW4，bit=1 表示 active。`raw_level_mask` 是未做 active-low 转换的原始 GPIO 电平，bit=1 表示高电平。`manual_action_name` 取值为 `none`、`manual_opening`、`manual_closing`。
 
 ## 14. 空调
 
@@ -1144,7 +1149,7 @@ int main() {
 | `led_status()` | `LedStatus` | TCA9554 LED mask、I2C 地址、寄存器读回值和分组状态。 |
 | `led_set_mask()` | `LedStatus` | 写原始 8-bit LED 输出 mask，并返回闭环读回状态。 |
 | `led_set_group()` | `LedStatus` | 按 `Jc/Cd/Wz/Dp/All` 和 `Off/Red/Green/Both` 设置 LED。 |
-| `switch_status()` | `SwitchStatus` | 读取 PSW1/PSW2/PSW3 active-low 输入。 |
+| `switch_status()` | `SwitchStatus` | 读取 PSW1/PSW2/PSW3/PSW4 active-low 输入。 |
 | `air_conditioner_status()` | `AirConditionerStatus` | HCNC4A 空调状态、温度、直流输入、配置参数回读、告警和错误码。 |
 | `air_conditioner_power()` | `AirConditionerControlResult` | 远程空调开关。 |
 | `air_conditioner_force_cool()` | `AirConditionerControlResult` | 强制制冷开关。 |

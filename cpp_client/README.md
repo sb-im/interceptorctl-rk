@@ -75,13 +75,15 @@ int main() {
 
     auto switches = dock.switch_status();
     if (switches.result.ok) {
-        bool platform_active = switches.platform_switch;
-        bool charge_base_active = switches.charge_base_switch;
+        bool aircraft_position_active = switches.aircraft_position_switch;
+        bool module_reached_active = switches.module_reached_switch;
         bool cover_button_active = switches.cover_button;
+        bool aircraft_present_active = switches.aircraft_present_switch;
         std::string manual_action = switches.manual_action;
-        (void)platform_active;
-        (void)charge_base_active;
+        (void)aircraft_position_active;
+        (void)module_reached_active;
         (void)cover_button_active;
+        (void)aircraft_present_active;
         (void)manual_action;
     }
 
@@ -133,9 +135,10 @@ Important conventions:
 - `led_set_mask()` writes the raw 8-bit LED output register.
 - `led_set_group()` sets one red/green group (`Jc`, `Cd`, `Wz`, `Dp`, or
   `All`) to `Off`, `Red`, `Green`, or `Both`.
-- `switch_status()` reads the active-low PSW1/PSW2/PSW3 inputs. PSW1/PD15 is
-  exposed as `platform_switch`, PSW2/PD14 as `charge_base_switch`, and
-  PSW3/PD13 as `cover_button`. The semantic fields are true when the input is
+- `switch_status()` reads the active-low PSW1/PSW2/PSW3/PSW4 inputs.
+  PSW1/PD15 is exposed as `aircraft_position_switch`, PSW2/PD14 as
+  `module_reached_switch`, PSW3/PD13 as `cover_button`, and PSW4/PD12 as
+  `aircraft_present_switch`. The semantic fields are true when the input is
   pulled low by the switch. `manual_action` is `"none"`,
   `"manual_opening"`, or `"manual_closing"` and reports MCU-side cover button
   handling.

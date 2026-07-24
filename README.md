@@ -249,15 +249,16 @@ power supply at Modbus address `0x01`.
 ./interceptorctl switch status
 ```
 
-These commands read the active-low PSW1/PSW2/PSW3 GPIO inputs:
+These commands read the active-low PSW1/PSW2/PSW3/PSW4 GPIO inputs:
 
-- `PSW1` / `PD15`: `platform_switch` (`top` compatibility field)
-- `PSW2` / `PD14`: `charge_base_switch` (`bottom` compatibility field)
+- `PSW1` / `PD15`: `aircraft_position_switch`
+- `PSW2` / `PD14`: `module_reached_switch`
 - `PSW3` / `PD13`: `cover_button`
+- `PSW4` / `PD12`: `aircraft_present_switch`
 
 The semantic fields are `true` when the switch pulls the input to GND.
 `raw_level_mask` keeps the raw GPIO level before active-low conversion:
-bit0=PSW1, bit1=PSW2, bit2=PSW3, and bit=1 means high level.
+bit0=PSW1, bit1=PSW2, bit2=PSW3, bit3=PSW4, and bit=1 means high level.
 `manual_action_name` is `none`, `manual_opening`, or `manual_closing` and
 reports MCU-side cover-button handling.
 

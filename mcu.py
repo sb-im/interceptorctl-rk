@@ -496,19 +496,24 @@ def parse_switch_status(data: bytes) -> Dict[str, Any]:
 
     top, bottom, cover_button, active_mask, raw_level_mask = struct.unpack_from("<BBBBB", data, 0)
     manual_action = data[5] if len(data) >= 6 else 0
+    aircraft_present = data[6] if len(data) >= 7 else 0
     return {
         "top": bool(top),
         "bottom": bool(bottom),
         "cover_button": bool(cover_button),
+        "aircraft_position_switch": bool(top),
+        "module_reached_switch": bool(bottom),
+        "aircraft_present_switch": bool(aircraft_present),
         "psw1": bool(top),
         "psw2": bool(bottom),
         "psw3": bool(cover_button),
+        "psw4": bool(aircraft_present),
         "active_mask": active_mask,
         "raw_level_mask": raw_level_mask,
         "manual_action": manual_action,
         "manual_action_name": MANUAL_ACTION_NAMES.get(manual_action, f"unknown_{manual_action}"),
         "active_low": True,
-        "raw": data[:6].hex(),
+        "raw": data[:7].hex(),
     }
 
 
@@ -870,11 +875,15 @@ def public_switches(switches: Dict[str, Any]) -> Dict[str, Any]:
         "top": switches.get("top"),
         "bottom": switches.get("bottom"),
         "cover_button": switches.get("cover_button"),
+        "aircraft_position_switch": switches.get("aircraft_position_switch"),
+        "module_reached_switch": switches.get("module_reached_switch"),
+        "aircraft_present_switch": switches.get("aircraft_present_switch"),
         "platform_switch": switches.get("top"),
         "charge_base_switch": switches.get("bottom"),
         "psw1": switches.get("psw1"),
         "psw2": switches.get("psw2"),
         "psw3": switches.get("psw3"),
+        "psw4": switches.get("psw4"),
         "active_mask": switches.get("active_mask"),
         "raw_level_mask": switches.get("raw_level_mask"),
         "manual_action": switches.get("manual_action"),

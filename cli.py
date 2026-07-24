@@ -273,12 +273,16 @@ def print_switches(switches: Dict[str, Any]) -> None:
         f"top={switches.get('top')} "
         f"bottom={switches.get('bottom')} "
         f"cover_button={switches.get('cover_button')} "
+        f"aircraft_position_switch={switches.get('aircraft_position_switch')} "
+        f"module_reached_switch={switches.get('module_reached_switch')} "
+        f"aircraft_present_switch={switches.get('aircraft_present_switch')} "
         f"platform_switch={switches.get('platform_switch')} "
         f"charge_base_switch={switches.get('charge_base_switch')} "
         f"manual_action={switches.get('manual_action_name')} "
         f"psw1={switches.get('psw1')} "
         f"psw2={switches.get('psw2')} "
         f"psw3={switches.get('psw3')} "
+        f"psw4={switches.get('psw4')} "
         f"active_mask=0x{int(switches.get('active_mask') or 0):02x} "
         f"raw_level_mask=0x{int(switches.get('raw_level_mask') or 0):02x} "
         f"active_low={switches.get('active_low')}"
@@ -639,7 +643,7 @@ notes:
             group_sub.add_parser(color, help=f"set {group} to {color}")
 
     for area, help_text in (
-        ("switch", "read PSW1/PSW2/PSW3 switch inputs"),
+        ("switch", "read PSW1/PSW2/PSW3/PSW4 switch inputs"),
     ):
         switch = sub.add_parser(area, help=help_text)
         switch_sub = switch.add_subparsers(dest="action", required=True)

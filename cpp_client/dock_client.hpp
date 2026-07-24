@@ -41,8 +41,9 @@
  * - Air-conditioner DC voltage/current: 0.1 V / 0.1 A.
  * - LED output mask: bit field, bit0=JC_R, bit1=JC_G, bit2=CD_R,
  *   bit3=CD_G, bit4=WZ_R, bit5=WZ_G, bit6=DP_R, bit7=DP_G.
- * - Switch inputs: active-low, PSW1/PD15=top, PSW2/PD14=bottom,
- *   PSW3/PD13=cover_button.
+ * - Switch inputs: active-low, PSW1/PD15=aircraft_position_switch,
+ *   PSW2/PD14=module_reached_switch, PSW3/PD13=cover_button,
+ *   PSW4/PD12=aircraft_present_switch.
  */
 
 #include <cstdint>
@@ -512,12 +513,13 @@ struct LedStatus {
 };
 
 /**
- * @brief Active-low PSW1/PSW2/PSW3 switch input status.
+ * @brief Active-low PSW1/PSW2/PSW3/PSW4 switch input status.
  *
  * Hardware mapping:
- * - PSW1 / PD15: platform microswitch.
- * - PSW2 / PD14: charge-base microswitch.
+ * - PSW1 / PD15: aircraft position microswitch.
+ * - PSW2 / PD14: module reached microswitch.
  * - PSW3 / PD13: cover open/close push button.
+ * - PSW4 / PD12: aircraft present microswitch.
  *
  * The switches short the input to GND. Therefore the semantic boolean fields
  * are true when the corresponding input is low.
@@ -535,10 +537,19 @@ struct SwitchStatus {
     /** @brief true when the cover open/close push button input PSW3/PD13 is active low. */
     bool cover_button = false;
 
-    /** @brief Same as top, named by customer-facing function. */
+    /** @brief true when the aircraft-position input PSW1/PD15 is active low. */
+    bool aircraft_position_switch = false;
+
+    /** @brief true when the module-reached input PSW2/PD14 is active low. */
+    bool module_reached_switch = false;
+
+    /** @brief true when the aircraft-present input PSW4/PD12 is active low. */
+    bool aircraft_present_switch = false;
+
+    /** @brief Compatibility field; same as aircraft_position_switch. */
     bool platform_switch = false;
 
-    /** @brief Same as bottom, named by customer-facing function. */
+    /** @brief Compatibility field; same as module_reached_switch. */
     bool charge_base_switch = false;
 
     /** @brief Same as top, named by board signal. */
@@ -550,7 +561,10 @@ struct SwitchStatus {
     /** @brief Same as cover_button, named by board signal. */
     bool psw3 = false;
 
-    /** @brief Active mask, bit0=PSW1/TOP, bit1=PSW2/BOT, bit2=PSW3/cover_button. */
+    /** @brief Same as aircraft_present_switch, named by board signal. */
+    bool psw4 = false;
+
+    /** @brief Active mask, bit0=PSW1, bit1=PSW2, bit2=PSW3, bit3=PSW4. */
     int active_mask = 0;
 
     /**
@@ -570,7 +584,7 @@ struct SwitchStatus {
     /**
      * @brief Raw GPIO level mask, bit=1 means high level before active-low conversion.
      *
-     * With the expected pull-up wiring and no switch pressed, bits 0..2 should
+     * With the expected pull-up wiring and no switch pressed, bits 0..3 should
      * normally read as 1. A closed switch pulls its bit to 0.
      */
     int raw_level_mask = 0;
@@ -1135,7 +1149,7 @@ public:
     /** @brief Read TCA9554 LED expander output/input/config status. */
     LedStatus led_status() const;
 
-    /** @brief Read PSW1/PSW2/PSW3 active-low switch input status. */
+    /** @brief Read PSW1/PSW2/PSW3/PSW4 active-low switch input status. */
     SwitchStatus switch_status() const;
 
     /**

@@ -604,11 +604,15 @@ void parse_switch_data(const Json& root, SwitchStatus& out) {
     out.top = get_bool(member(*switches, "top"));
     out.bottom = get_bool(member(*switches, "bottom"));
     out.cover_button = get_bool(member(*switches, "cover_button"));
+    out.aircraft_position_switch = get_bool(member(*switches, "aircraft_position_switch"));
+    out.module_reached_switch = get_bool(member(*switches, "module_reached_switch"));
+    out.aircraft_present_switch = get_bool(member(*switches, "aircraft_present_switch"));
     out.platform_switch = get_bool(member(*switches, "platform_switch"));
     out.charge_base_switch = get_bool(member(*switches, "charge_base_switch"));
     out.psw1 = get_bool(member(*switches, "psw1"));
     out.psw2 = get_bool(member(*switches, "psw2"));
     out.psw3 = get_bool(member(*switches, "psw3"));
+    out.psw4 = get_bool(member(*switches, "psw4"));
     out.active_mask = get_int(member(*switches, "active_mask"));
     out.manual_action = get_string(member(*switches, "manual_action_name"), "none");
     out.manual_action_code = get_int(member(*switches, "manual_action"));
