@@ -19,7 +19,7 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current STM32 firmware version: `0x002C`.
+Current STM32 firmware version: `0x0033`.
 Current RK3588 `interceptorctl` version: `20260701-1`.
 
 ## Files
@@ -106,14 +106,14 @@ The verified flash flow on `jjj` is:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x002C_serial_motor_recovery.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0033_mcu_motor_communication.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x002C_serial_motor_recovery.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0033_mcu_motor_communication.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs
@@ -333,9 +333,9 @@ The `motor ... trap` interface uses raw motor protocol units:
 - `--accel`: accel and decel in `RPM/s`.
 
 `status` and `motor status` return motor positions in `0.1 degree` plus driver
-flags such as `enabled`, `stall`, and `reached`. Firmware `0x001C+` refreshes
-motor position/status inside the MCU before returning the status response only
-when no motor is moving.
+flags such as `enabled`, `stall`, and `reached`. The `communicated` field is
+maintained by the MCU from valid motor replies. The separate RK SocketCAN
+observation is diagnostic data used to assist asynchronous motion monitoring.
 
 ## Environment Sensor
 

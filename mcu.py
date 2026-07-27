@@ -371,6 +371,7 @@ def parse_status(data: bytes) -> Dict[str, Any]:
             "axis_pos": axis_pos,
             "axis_motor_status": data[12],
             "last_result": data[14],
+            "motor_communicated": bool(data[15]),
         },
         "power": {
             "set_volt": set_volt,
@@ -751,7 +752,7 @@ def decode_rx_summary(cmd_set: int, cmd_id: int, data: bytes) -> str:
         return f"decode_error={exc} {raw}"
 
 
-def public_motor_axis(state: Any, position: Any, status: Any) -> Dict[str, Any]:
+def public_motor_axis(state: Any, position: Any, status: Any, communicated: Any = False) -> Dict[str, Any]:
     try:
         flags = int(status)
     except (TypeError, ValueError):
@@ -759,6 +760,7 @@ def public_motor_axis(state: Any, position: Any, status: Any) -> Dict[str, Any]:
     return {
         "state": state,
         "position": position,
+        "communicated": bool(communicated),
         "enabled": bool(flags & 0x02),
         "stall": bool(flags & 0x01),
         "reached": bool(flags & 0x04),
@@ -779,6 +781,7 @@ def public_motion(
         motion.get("axis_state_name"),
         motion.get("axis_pos"),
         motion.get("axis_motor_status"),
+        motion.get("motor_communicated"),
     )
     axis["target_position"] = target_position
     axis["observed_reached"] = False

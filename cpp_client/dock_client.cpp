@@ -532,6 +532,7 @@ std::string ac_action_name(AirConditionerAction action) {
 void parse_axis_data(const Json& axis_json, AxisData& axis) {
     axis.state = get_string(member(axis_json, "state"));
     axis.position_0p1deg = get_int(member(axis_json, "position"));
+    axis.communicated = get_bool(member(axis_json, "communicated"));
     axis.can_communicated = get_bool(member(axis_json, "can_communicated"));
     axis.can_position_0p1deg = get_int(member(axis_json, "can_position"));
     axis.can_age_s = get_double(member(axis_json, "can_age_s"), -1.0);

@@ -179,11 +179,12 @@ def print_motor(motor: Dict[str, Any]) -> None:
     position = axis.get("position", motor.get("axis_pos"))
     print(f"motion: active={active} axis={state}")
     print(f"position: axis={position}/0.1deg")
+    print(f"motor_communication: communicated={axis.get('communicated')}")
     if "can_position" in axis:
         print(
             "can_observe: "
             f"position={axis.get('can_position')}/0.1deg "
-            f"communicated={axis.get('can_communicated')} "
+            f"fresh={axis.get('can_communicated')} "
             f"target={axis.get('target_position')} "
             f"observed_reached={axis.get('observed_reached')}"
         )

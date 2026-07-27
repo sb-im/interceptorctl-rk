@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x002C`
+- MCU 固件版本：`0x0033`
 - RK3588 `interceptorctl` 版本：`20260701-1`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -229,7 +229,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x002C"}
+{"ok":true,"version":"0x0033"}
 ```
 
 字段说明：
@@ -280,6 +280,7 @@ ls -l /tmp/interceptorctl.sock
     "axis": {
       "state": "unknown",
       "position": 2092769,
+      "communicated": true,
       "enabled": false,
       "stall": false,
       "reached": false,
@@ -303,6 +304,7 @@ ls -l /tmp/interceptorctl.sock
 | `motor.active` | string | 当前动作。常见值：`idle`、`door_open`、`door_close`、`door_move`。 |
 | `motor.axis.state` | string | 单电机联动轴状态。常见值：`unknown`、`moving`、`open`、`closed`、`error`。 |
 | `motor.axis.position` | 0.1deg | 单电机当前绝对位置。`2092769` 表示 `209276.9deg` 电机侧角度。 |
+| `motor.axis.communicated` | bool | MCU 主动轮询维护的正式电机通讯状态；有效回复后为 `true`，连续超时后为 `false`。 |
 | `motor.axis.enabled` | bool | 电机驱动器使能状态。`true` 表示当前驱动器处于使能。 |
 | `motor.axis.stall` | bool | 电机驱动器堵转/保护标志。 |
 | `motor.axis.reached` | bool | 驱动器原始到位标志。 |
@@ -311,6 +313,7 @@ ls -l /tmp/interceptorctl.sock
 | `motor.axis.calib_failed` | bool | MCU 侧标定失败标志。 |
 | `motor.axis.final_reached` | bool | MCU 运动监督后的最终到位标志。 |
 | `motor.axis.can_position` | 0.1deg | RK 侧只监听 CAN 得到的电机位置。 |
+| `motor.axis.can_communicated` | bool | RK 侧辅助 SocketCAN 观测是否新鲜，仅用于运动事件监视，不代表正式电机通讯状态。 |
 | `motor.axis.observed_reached` | bool | RK 侧按目标位置 ±20 判断的到位估计，MCU 仍负责真正到位失能。 |
 
 注意：`position` 是电机侧绝对角度，不是门板开合角度或平台直线位移。
@@ -346,6 +349,7 @@ ls -l /tmp/interceptorctl.sock
     "axis": {
       "state": "open",
       "position": 2092769,
+      "communicated": true,
       "enabled": true,
       "stall": false,
       "reached": true,
@@ -1143,7 +1147,7 @@ int main() {
 | --- | --- | --- |
 | `version()` | `VersionResult` | `version` 字符串。 |
 | `stop_status()` | `StopStatus` | `hardware_stop`。 |
-| `motor_status()` | `MotorStatus` | `MotorData active/axis`，含 `position/enabled/stall/reached` 等字段。 |
+| `motor_status()` | `MotorStatus` | `MotorData active/axis`，含 MCU 维护的 `communicated` 以及 `position/enabled/stall/reached` 等字段。 |
 | `door_open()` / `door_close()` | `MotionActionResult` | 应用层门打开/关闭动作，默认只等待 MCU ack。 |
 | `motor_enable()` / `motor_disable()` | `MotorEnableResult` | 底层电机使能/失能，用于调试和标定。 |
 | `motor_home()` / `motor_home_stop()` | `MotionActionResult` / `Result` | 底层回零/校准启动和停止，完成结果建议通过 `start_motion_event_thread()` 接收。 |

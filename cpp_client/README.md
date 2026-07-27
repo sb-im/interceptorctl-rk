@@ -106,8 +106,12 @@ Important conventions:
 - Motor position unit is `0.1deg`.
 - Motor speed unit is `0.1RPM`.
 - Motor acceleration unit is `RPM/s`.
-- `motor_status()` returns linked-axis `enabled`, `stall`, `reached`,
-  `calibed`, `calibing`, `calib_failed`, and `final_reached` flags.
+- `motor_status()` returns the MCU-maintained `communicated` state plus linked-axis
+  `enabled`, `stall`, `reached`, `calibed`, `calibing`, `calib_failed`, and
+  `final_reached` flags.
+- `communicated` is authoritative for motor communication health. The separate
+  `can_communicated` field only reports freshness of the auxiliary RK SocketCAN
+  listener used for asynchronous motion observation.
 - Customer code should read `motor_status().motor.axis`.
 - Application-level motor APIs are `door_open()` and `door_close()`.
 - `door_open()`, `door_close()`, and `motor_trapezoid()` return after MCU ack by

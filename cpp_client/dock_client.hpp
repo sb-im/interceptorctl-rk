@@ -224,7 +224,21 @@ struct AxisData {
      */
     int position_0p1deg = 0;
 
-    /** @brief true when RK SocketCAN has recently observed a motor position frame. */
+    /**
+     * @brief Authoritative motor communication state maintained by the MCU.
+     *
+     * true means the MCU has received a valid reply from this motor within its
+     * communication timeout. The MCU actively polls an idle motor, so this
+     * field also recovers automatically after the motor reconnects.
+     */
+    bool communicated = false;
+
+    /**
+     * @brief true when the auxiliary RK SocketCAN listener has fresh motor data.
+     *
+     * This field is used for asynchronous motion observation. It is not the
+     * authoritative motor communication state; use communicated for that.
+     */
     bool can_communicated = false;
 
     /**

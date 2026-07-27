@@ -88,6 +88,7 @@ void print_axis(const char* name, const interceptorctl::AxisData& axis) {
     std::cout << "  " << name
               << ": state=" << axis.state
               << " position=" << axis.position_0p1deg << "/0.1deg"
+              << " communicated=" << std::boolalpha << axis.communicated
               << " enabled=" << std::boolalpha << axis.enabled
               << " stall=" << axis.stall
               << " reached=" << axis.reached
