@@ -160,6 +160,72 @@ def print_power_command_target(command: str, resp: Dict[str, Any]) -> None:
         print(f"target: enabled={requested.get('output_enabled')}")
 
 
+def print_power_fault(fault: Dict[str, Any]) -> None:
+    power_input = fault.get("input") or {}
+    control = fault.get("control") or {}
+    measurements = fault.get("measurements") or {}
+    temperatures = fault.get("temperatures") or {}
+    fans = fault.get("fans") or {}
+    versions = fault.get("versions") or {}
+    alarm = fault.get("alarm") or {}
+
+    print(f"power_health: has_fault={fault.get('has_fault')}")
+    print(
+        "power_input: "
+        f"ac={scaled(power_input.get('ac_voltage_0p01v'), 100, 2, 'V')} "
+        f"state={power_input.get('ac_voltage_state')} "
+        f"bus={scaled(power_input.get('bus_voltage_0p01v'), 100, 2, 'V')} "
+        f"pfc={power_input.get('pfc_status_name')}({power_input.get('pfc_status')})"
+    )
+    print(
+        "power_control: "
+        f"mode={control.get('mode_name')}({control.get('mode')}) "
+        f"output_enabled={control.get('output_enabled')} "
+        f"ioa={control.get('ioa_function_name')}({control.get('ioa_function')}) "
+        f"set_voltage={scaled(control.get('set_voltage_mv'), 1000, 3, 'V')} "
+        f"set_current={scaled(control.get('set_current_ma'), 1000, 3, 'A')}"
+    )
+    print(
+        "power_measurements: "
+        f"local_voltage={scaled(measurements.get('local_voltage_mv'), 1000, 3, 'V')} "
+        f"remote_voltage={scaled(measurements.get('remote_voltage_mv'), 1000, 3, 'V')} "
+        f"output_current={scaled(measurements.get('output_current_ma'), 1000, 3, 'A')}"
+    )
+    print(
+        "power_temperatures: "
+        f"heatsink={scaled(temperatures.get('heatsink_0p1c'), 10, 1, 'C')} "
+        f"ambient={scaled(temperatures.get('ambient_0p1c'), 10, 1, 'C')} "
+        f"hs1={scaled(temperatures.get('hs1_0p1c'), 10, 1, 'C')} "
+        f"hs2={scaled(temperatures.get('hs2_0p1c'), 10, 1, 'C')} "
+        f"hs3={scaled(temperatures.get('hs3_0p1c'), 10, 1, 'C')}"
+    )
+    print(
+        "power_fans: "
+        f"primary={fans.get('primary_rpm')}RPM "
+        f"secondary={fans.get('secondary_rpm')}RPM "
+        f"pfc_software={versions.get('pfc_software')}"
+    )
+    print(
+        "power_alarm: "
+        f"raw={alarm.get('hex')} active_count={alarm.get('active_count')} "
+        f"unknown_mask=0x{int(alarm.get('unknown_mask') or 0):08x}"
+    )
+    for item in alarm.get("bits") or []:
+        state = "ACTIVE" if item.get("active") else "clear"
+        print(f"  bit{int(item.get('bit') or 0):02d} {state:6s} {item.get('description')}")
+
+    print("power_diagnosis:")
+    for message in fault.get("diagnosis") or []:
+        print(f"  - {message}")
+
+    print("power_raw_reads:")
+    for read in fault.get("raw_reads") or []:
+        print(
+            f"  start=0x{int(read.get('start') or 0):04x} count={read.get('count')} "
+            f"attempts={read.get('attempts')} tx={read.get('tx_hex')} rx={read.get('rx_hex')}"
+        )
+
+
 def print_status(resp: Dict[str, Any]) -> None:
     motor = resp.get("motor") or (resp.get("status") or {}).get("motion") or {}
     power = resp.get("power") or (resp.get("status") or {}).get("power") or {}
@@ -377,6 +443,8 @@ def print_human(command: str, resp: Dict[str, Any]) -> None:
             print(f"result={resp.get('result')} name={resp.get('result_name')} error={resp.get('error')}")
             if resp.get("rx_hex") is not None:
                 print(f"rx: len={resp.get('rx_len')} hex={resp.get('rx_hex')}")
+        elif command == "power_fault" and resp.get("power_fault"):
+            print_power_fault(resp["power_fault"])
         elif command in {"power_set", "power_on", "power_off"}:
             print_power_command_target(command, resp)
         elif command == "power_status" and resp.get("power"):
@@ -509,6 +577,7 @@ def build_parser() -> argparse.ArgumentParser:
   ./interceptorctl motor door trap --pos 17970 --speed 3000 --accel 100 --wait --timeout 20
 
   ./interceptorctl power status
+  ./interceptorctl power fault
   ./interceptorctl power set 24.00 1.00
   ./interceptorctl power off
   ./interceptorctl power raw --hex "01 03 00 1c 00 01"
@@ -609,6 +678,7 @@ notes:
     power = sub.add_parser("power", help="power supply commands")
     power_sub = power.add_subparsers(dest="action", required=True)
     power_sub.add_parser("status", help="query output voltage/current/alarm")
+    power_sub.add_parser("fault", help="read and decode detailed power fault registers")
     power_sub.add_parser("temp", help="compatibility alias for status")
     set_cmd = power_sub.add_parser("set", help="set output voltage/current")
     set_cmd.add_argument("voltage", help="voltage in V, for example 24.00")
@@ -772,6 +842,8 @@ def command_from_args(args: argparse.Namespace) -> tuple[str, Dict[str, Any]]:
     if args.area == "power":
         if args.action == "status":
             return "power_status", {}
+        if args.action == "fault":
+            return "power_fault", {}
         if args.action == "temp":
             return "power_status", {}
         if args.action == "set":

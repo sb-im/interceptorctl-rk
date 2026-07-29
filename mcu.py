@@ -142,6 +142,28 @@ POWER_ERROR_NAMES = {
     11: "byte_count",
 }
 
+POWER_MODBUS_ADDRESS = 0x01
+POWER_RAW_BUSY_RETRIES = 40
+POWER_RAW_BUSY_RETRY_DELAY_S = 0.03
+
+POWER_ALARM_DEFINITIONS = [
+    (0, "ac_input_undervoltage_alarm", "AC input undervoltage alarm"),
+    (1, "ac_input_overvoltage_protection", "AC input overvoltage protection"),
+    (2, "ambient_overtemperature_protection", "Ambient overtemperature protection"),
+    (3, "bus_overvoltage_protection", "BUS overvoltage protection"),
+    (4, "heatsink_overtemperature_protection", "Heatsink overtemperature protection"),
+    (5, "ambient_overtemperature_alarm", "Ambient overtemperature alarm"),
+    (6, "hs1_overtemperature_protection", "HS1 overtemperature protection"),
+    (9, "primary_fan_stall_alarm", "Primary-side fan stopped fault alarm"),
+    (10, "ac_failure_alarm", "AC FAILURE alarm"),
+    (13, "secondary_fan_stall_alarm", "Secondary-side fan stopped fault alarm"),
+    (14, "output_undervoltage_alarm", "Power output undervoltage alarm"),
+    (15, "output_overvoltage_protection", "Power output overvoltage protection"),
+    (16, "hs2_overtemperature_protection", "HS2 overtemperature protection"),
+    (17, "hs3_overtemperature_protection", "HS3 overtemperature protection"),
+    (18, "output_overcurrent_protection", "Power output overcurrent protection"),
+]
+
 AIRCRAFT_RESULT_NAMES = {
     0: "ok",
     1: "bad_len",
@@ -271,6 +293,160 @@ def crc16_modbus(buf: bytes) -> int:
             else:
                 crc >>= 1
     return crc & 0xFFFF
+
+
+def build_modbus_read_holding(address: int, start: int, count: int) -> bytes:
+    request = struct.pack(">BBHH", address & 0xFF, 0x03, start & 0xFFFF, count & 0xFFFF)
+    return request + struct.pack("<H", crc16_modbus(request))
+
+
+def parse_modbus_read_holding(response: bytes, address: int, count: int) -> List[int]:
+    expected_len = 5 + (count * 2)
+    if len(response) != expected_len:
+        raise ValueError(f"Modbus response length {len(response)} != expected {expected_len}")
+    expected_crc = struct.unpack_from("<H", response, len(response) - 2)[0]
+    actual_crc = crc16_modbus(response[:-2])
+    if expected_crc != actual_crc:
+        raise ValueError(f"Modbus CRC 0x{expected_crc:04x} != calculated 0x{actual_crc:04x}")
+    if response[0] != (address & 0xFF):
+        raise ValueError(f"Modbus slave 0x{response[0]:02x} != expected 0x{address:02x}")
+    if response[1] & 0x80:
+        raise ValueError(f"Modbus exception function=0x{response[1]:02x} code=0x{response[2]:02x}")
+    if response[1] != 0x03:
+        raise ValueError(f"Modbus function 0x{response[1]:02x} != expected 0x03")
+    if response[2] != count * 2:
+        raise ValueError(f"Modbus byte count {response[2]} != expected {count * 2}")
+    return [struct.unpack_from(">H", response, 3 + (i * 2))[0] for i in range(count)]
+
+
+def signed16(value: int) -> int:
+    return value - 0x10000 if value & 0x8000 else value
+
+
+def signed32(value: int) -> int:
+    return value - 0x100000000 if value & 0x80000000 else value
+
+
+def power_register_u32(registers: Dict[int, int], start: int) -> int:
+    return ((registers[start] & 0xFFFF) << 16) | (registers[start + 1] & 0xFFFF)
+
+
+def power_ac_input_state(voltage_0p01v: int) -> str:
+    if voltage_0p01v < 5000:
+        return "ac_failure"
+    if voltage_0p01v < 8500:
+        return "undervoltage_protection"
+    if voltage_0p01v < 9000:
+        return "below_undervoltage_recovery_threshold"
+    if voltage_0p01v <= 26400:
+        return "normal"
+    if voltage_0p01v < 27500:
+        return "above_rated_input_range"
+    return "overvoltage_protection"
+
+
+def decode_power_fault_registers(registers: Dict[int, int]) -> Dict[str, Any]:
+    required = [
+        0x0002, 0x0003, 0x0005, 0x0006, 0x0008, 0x0009, 0x000A, 0x000B,
+        0x001C, 0x001D, 0x001E, 0x001F, 0x0020, 0x0021, 0x0022,
+        0x002E, 0x002F, 0x0030, 0x0031, 0x0032, 0x0033, 0x0034, 0x0035,
+        0x0036, 0x0037, 0x0038,
+    ]
+    missing = [f"0x{address:04x}" for address in required if address not in registers]
+    if missing:
+        raise ValueError(f"missing power diagnostic registers: {', '.join(missing)}")
+
+    ac_voltage = registers[0x0002]
+    ac_state = power_ac_input_state(ac_voltage)
+    pfc_status = registers[0x0006]
+    mode = registers[0x001C]
+    ioa_function = registers[0x0022]
+    alarm_raw = power_register_u32(registers, 0x0037)
+    alarm_bits = [
+        {
+            "bit": bit,
+            "mask": 1 << bit,
+            "name": name,
+            "description": description,
+            "active": bool(alarm_raw & (1 << bit)),
+        }
+        for bit, name, description in POWER_ALARM_DEFINITIONS
+    ]
+    known_alarm_mask = sum(1 << bit for bit, _, _ in POWER_ALARM_DEFINITIONS)
+    active_alarms = [item for item in alarm_bits if item["active"]]
+    unknown_alarm_mask = alarm_raw & ~known_alarm_mask & 0xFFFFFFFF
+
+    mode_name = {0: "local", 1: "remote"}.get(mode, "unknown")
+    pfc_status_name = {0: "self_test_failed", 1: "self_test_ok"}.get(pfc_status, "unknown")
+    ioa_function_name = {0: "none", 1: "interlock", 2: "ds18b20"}.get(ioa_function, "unknown")
+
+    diagnosis = []
+    if ac_state != "normal":
+        diagnosis.append(f"AC input state is {ac_state} at {ac_voltage / 100.0:.2f} V")
+    if pfc_status != 1:
+        diagnosis.append(f"PFC power-on self-test is {pfc_status_name} (raw={pfc_status})")
+    for item in active_alarms:
+        if item["bit"] == 10:
+            diagnosis.append("AC FAILURE alarm is active; the manual defines it as AC input below 50 V for at least 50 ms")
+        else:
+            diagnosis.append(f"{item['description']} is active")
+    if unknown_alarm_mask:
+        diagnosis.append(f"Unknown or reserved alarm bits are active: 0x{unknown_alarm_mask:08x}")
+    if ioa_function == 1 and not bool(registers[0x0021]):
+        diagnosis.append("IOA interlock is enabled; IOA must be connected to a CN2 GND pin before output can be enabled")
+
+    has_fault = ac_state != "normal" or pfc_status != 1 or alarm_raw != 0
+    if not diagnosis:
+        diagnosis.append("No abnormal condition was reported by the decoded registers")
+
+    return {
+        "has_fault": has_fault,
+        "input": {
+            "ac_voltage_0p01v": ac_voltage,
+            "ac_voltage_state": ac_state,
+            "bus_voltage_0p01v": registers[0x0003],
+            "pfc_status": pfc_status,
+            "pfc_status_name": pfc_status_name,
+        },
+        "control": {
+            "mode": mode,
+            "mode_name": mode_name,
+            "set_current_ma": power_register_u32(registers, 0x001D),
+            "set_voltage_mv": power_register_u32(registers, 0x001F),
+            "output_enabled": bool(registers[0x0021]),
+            "ioa_function": ioa_function,
+            "ioa_function_name": ioa_function_name,
+        },
+        "measurements": {
+            "output_current_ma": signed32(power_register_u32(registers, 0x002E)),
+            "local_voltage_mv": signed32(power_register_u32(registers, 0x0030)),
+            "remote_voltage_mv": signed32(power_register_u32(registers, 0x0032)),
+        },
+        "temperatures": {
+            "heatsink_0p1c": signed16(registers[0x0008]),
+            "ambient_0p1c": signed16(registers[0x0009]),
+            "hs1_0p1c": signed16(registers[0x000A]),
+            "hs2_0p1c": signed16(registers[0x0034]),
+            "hs3_0p1c": signed16(registers[0x0035]),
+        },
+        "fans": {
+            "primary_rpm": registers[0x0005],
+            "secondary_rpm": registers[0x0036],
+        },
+        "versions": {
+            "pfc_software": registers[0x000B],
+        },
+        "alarm": {
+            "raw": alarm_raw,
+            "hex": f"0x{alarm_raw:08x}",
+            "active_count": len(active_alarms),
+            "active_names": [item["name"] for item in active_alarms],
+            "unknown_mask": unknown_alarm_mask,
+            "bits": alarm_bits,
+        },
+        "diagnosis": diagnosis,
+        "registers": {f"0x{address:04x}": registers[address] for address in sorted(registers)},
+    }
 
 
 def build_packet(seq: int, cmd_set: int, cmd_id: int, payload: bytes = b"") -> bytes:
@@ -1960,6 +2136,100 @@ class McuClient:
                 "rx_hex": rx.hex(),
             }
         return {"ok": False, "error": "power raw response too short"}
+
+    def _power_read_diagnostic_registers(self, start: int, count: int) -> Dict[str, Any]:
+        request = build_modbus_read_holding(POWER_MODBUS_ADDRESS, start, count)
+        last_response: Dict[str, Any] = {}
+        for attempt in range(1, POWER_RAW_BUSY_RETRIES + 1):
+            last_response = self.power_raw_transfer(request, timeout_ms=1000, idle_ms=20)
+            if last_response.get("ok"):
+                try:
+                    response = bytes.fromhex(str(last_response.get("rx_hex") or ""))
+                    words = parse_modbus_read_holding(response, POWER_MODBUS_ADDRESS, count)
+                except (TypeError, ValueError) as exc:
+                    return {
+                        "ok": False,
+                        "error": f"power diagnostic response 0x{start:04x}: {exc}",
+                        "tx_hex": request.hex(),
+                        "rx_hex": last_response.get("rx_hex"),
+                    }
+                return {
+                    "ok": True,
+                    "start": start,
+                    "count": count,
+                    "attempts": attempt,
+                    "words": words,
+                    "tx_hex": request.hex(),
+                    "rx_hex": last_response.get("rx_hex"),
+                }
+            if int(last_response.get("result", -1)) != 2:
+                return {
+                    "ok": False,
+                    "error": last_response.get("error") or (
+                        f"power diagnostic read 0x{start:04x} failed: "
+                        f"{last_response.get('result_name', 'unknown')}"
+                    ),
+                    "result": last_response.get("result"),
+                    "tx_hex": request.hex(),
+                    "rx_hex": last_response.get("rx_hex"),
+                }
+            time.sleep(POWER_RAW_BUSY_RETRY_DELAY_S)
+
+        return {
+            "ok": False,
+            "error": (
+                f"power diagnostic read 0x{start:04x} remained busy after "
+                f"{POWER_RAW_BUSY_RETRIES} attempts"
+            ),
+            "result": last_response.get("result"),
+            "tx_hex": request.hex(),
+            "rx_hex": last_response.get("rx_hex"),
+        }
+
+    def power_fault_status(self) -> Dict[str, Any]:
+        blocks = [
+            (0x0002, 2),
+            (0x0005, 2),
+            (0x0008, 4),
+            (0x001C, 7),
+            (0x002E, 11),
+        ]
+        registers: Dict[int, int] = {}
+        raw_reads = []
+        for start, count in blocks:
+            read = self._power_read_diagnostic_registers(start, count)
+            raw_reads.append({
+                key: value
+                for key, value in read.items()
+                if key in {"start", "count", "attempts", "tx_hex", "rx_hex"}
+            })
+            if not read.get("ok"):
+                return {
+                    "ok": False,
+                    "error": read.get("error", "power diagnostic read failed"),
+                    "result": read.get("result"),
+                    "raw_reads": raw_reads,
+                }
+            for offset, value in enumerate(read["words"]):
+                registers[start + offset] = int(value)
+
+        try:
+            fault = decode_power_fault_registers(registers)
+        except (KeyError, TypeError, ValueError) as exc:
+            return {
+                "ok": False,
+                "error": f"power diagnostic decode failed: {exc}",
+                "raw_reads": raw_reads,
+            }
+        fault["raw_reads"] = raw_reads
+        self.logger.info(
+            "power fault diagnostic has_fault=%s alarm=%s pfc=%s ac=%.2fV",
+            fault.get("has_fault"),
+            (fault.get("alarm") or {}).get("hex"),
+            (fault.get("input") or {}).get("pfc_status_name"),
+            ((fault.get("input") or {}).get("ac_voltage_0p01v") or 0) / 100.0,
+        )
+        return {"ok": True, "power_fault": fault}
 
     def aircraft_transfer(self, tx: bytes, timeout_ms: int = 1000, idle_ms: int = 30) -> Dict[str, Any]:
         if not tx:

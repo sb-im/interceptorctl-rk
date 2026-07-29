@@ -210,6 +210,8 @@ def dispatch(client: McuClient, request: Dict[str, Any]) -> Dict[str, Any]:
         return client.motor_enable(str(args["target"]), bool(args["enabled"]))
     if cmd == "power_status":
         return client.power_query(False)
+    if cmd == "power_fault":
+        return client.power_fault_status()
     if cmd == "power_temp":
         # Backward-compatible alias. power_status already includes temperature.
         return client.power_query(False)

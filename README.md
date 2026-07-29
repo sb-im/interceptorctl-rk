@@ -178,6 +178,7 @@ protocol units. `door`, `motor`, and `motor1` select the linked motor.
 
 ```bash
 ./interceptorctl power status
+./interceptorctl power fault             # detailed input/PFC/thermal/fan/alarm diagnosis
 ./interceptorctl power temp              # alias of power status
 ./interceptorctl power set 24.00 1.00    # voltage/current in V/A
 ./interceptorctl power on
@@ -189,6 +190,15 @@ protocol units. `door`, `motor`, and `motor1` select the linked motor.
 `power raw` is a debug command that sends exact raw bytes to the MCU USART3
 power RS485 path. It does not auto-fill CRC. This example reads a GPpower3000
 power supply at Modbus address `0x01`.
+
+`power fault` is read-only. It uses the same raw passthrough internally and
+decodes the AZ-series diagnostic registers documented by the power supply
+manufacturer. The output includes AC and BUS voltage, PFC self-test status,
+control mode, IOA function, local/remote measurements, five temperatures, both
+fan speeds, every manufacturer-defined alarm bit within bits 0 through 18,
+diagnosis messages, and the
+raw Modbus request/response frames. Use `./interceptorctl --json power fault`
+for the corresponding structured response.
 
 ### UPS
 
