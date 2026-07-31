@@ -170,9 +170,14 @@ to change the wait timeout.
 ./interceptorctl motor door trap --pos 181900 --speed 3000 --accel 100 --wait --timeout 20
 ```
 
-`home` starts low-level motor homing/calibration. `home-stop` sends the motor
-driver homing-stop command. `trap` means absolute trapezoid motion in raw motor
-protocol units. `door`, `motor`, and `motor1` select the linked motor.
+`home` starts the close-side homing test. The MCU temporarily changes the motor
+homing direction, waits for PSW1, stops homing, clears the motor coordinate,
+verifies position zero, and finally disables the motor. A successful asynchronous
+event uses `reason=homing_switch_zeroed`. `home-stop` cancels this sequence.
+After successful homing, the configured close coordinate is `0` and the open
+coordinate is `-427000`, both in motor-side `0.1 degree` units. `trap` means
+absolute trapezoid motion in raw motor protocol units. `door`, `motor`, and
+`motor1` select the linked motor.
 
 ### GPpower3000 Power Supply
 
@@ -277,8 +282,9 @@ only when `aircraft_position_switch` (PSW2) and
 `aircraft_present_switch` (PSW4) have the same state: both active or both
 inactive. A request is blocked when exactly one input is active. The inputs
 are sampled only when the button triggers the close; changing them after
-motion starts does not stop the motion. `module_reached_switch` (PSW1) is
-status-only and is not part of this close interlock.
+motion starts does not stop the motion. `module_reached_switch` (PSW1) is not
+part of this close interlock, but the close-side homing test uses it as the
+zero-position trigger.
 
 ### Air Conditioner
 
