@@ -21,7 +21,7 @@
 - 客户程序、测试脚本、调度程序都通过 `/tmp/interceptorctl.sock` 发 JSON 请求。
 - 每个请求是一行 UTF-8 JSON，以 `\n` 结尾；每个回复也是一行 JSON。
 - socket 路径默认是 `/tmp/interceptorctl.sock`。
-- 当前 MCU 固件版本是 `0x0033`，RK3588 `interceptorctl` 版本是 `20260701-1`。
+- 当前测试分支 MCU 固件版本是 `0x0036`，RK3588 `interceptorctl` 版本是 `20260701-1`。
 
 启动 daemon：
 
@@ -48,7 +48,7 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 回复也是一行 JSON。客户默认 API 只保留业务字段，例如：
 
 ```json
-{"ok":true,"version":"0x0033"}
+{"ok":true,"version":"0x0036"}
 ```
 
 通用字段：
@@ -71,7 +71,7 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 
 空调 `ac_control` 目前支持远程开关、强制制冷/加热、正常/静音模式、监控湿度下发，以及制冷启动温度、制冷回差、加热启动温度、加热回差、除湿设定点写入。写入后用 `ac_status` 回读确认实际寄存器值。
 
-`switch_status` 用于读取 PSW1/PSW2/PSW3/PSW4 active-low 输入：PSW1/PD15=`module_reached_switch`，PSW2/PD14=`aircraft_position_switch`，PSW3/PD13=`cover_button`，PSW4/PD12=`aircraft_present_switch`。按钮触发手动关盖时，MCU 只在触发瞬间比较 PSW2 与 PSW4：两者都按下或都没按下时允许关盖，只有一个按下时阻止关盖。运动开始后不再检查这两个输入。PSW1 不参与关盖条件，但关闭方向回零时作为零点触发开关。
+`switch_status` 用于读取 PSW1/PSW2/PSW3/PSW4 active-low 输入：PSW1/PD15=`module_reached_switch`，PSW2/PD14=`aircraft_position_switch`，PSW3/PD13=`cover_button`，PSW4/PD12=`aircraft_present_switch`。按钮触发手动关盖时，MCU 只在触发瞬间比较 PSW2 与 PSW4：两者都按下或都没按下时允许关盖，只有一个按下时阻止关盖。运动开始后不再检查这两个输入。PSW1 不参与关盖条件，但关闭方向回零时作为零点触发开关。电机驱动器需预先配置正确的回零方向与运动参数，MCU 回零期间不会读取或改写这些参数。
 
 ## 4. 急停接口
 

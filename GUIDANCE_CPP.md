@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x0033`
+- MCU 固件版本：`0x0036`（测试分支）
 - RK3588 `interceptorctl` 版本：`20260701-1`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -210,7 +210,7 @@ ls -l /tmp/interceptorctl.sock
 | cmd | args | 说明 |
 | --- | --- | --- |
 | `motor_enable` | `{"target":"door","enabled":true}` | 单电机底层使能或失能，调试和标定用。 |
-| `motor_home` | `{"target":"door","wait":false,"timeout":60}` | 关闭方向回零测试：MCU 等待 PSW1、停止回零、清零并校验。成功事件为 `action="motor_home"`、`monitor="home"`、`reason="homing_switch_zeroed"`。 |
+| `motor_home` | `{"target":"door","wait":false,"timeout":60}` | 关闭方向回零测试：电机驱动器需预先配置回零方向和运动参数；MCU 不读写这些参数，只负责等待 PSW1、停止、清零、校验和去使能。成功事件为 `action="motor_home"`、`monitor="home"`、`reason="homing_switch_zeroed"`。 |
 | `motor_home_stop` | `{"target":"door"}` | 停止当前底层回零/校准流程，不等同于 `motor_stop`。 |
 | `motor_trapezoid` | `{"target":"door","position":181900,"speed":3000,"accel":100,"wait":false,"timeout":20}` | 单电机绝对位置梯形运动，标定用。运动中再次下发会更新目标。 |
 | `motor_stop` | `{}` | MCU 软件电机停止，调试用。 |
@@ -229,7 +229,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x0033"}
+{"ok":true,"version":"0x0036"}
 ```
 
 字段说明：
@@ -852,7 +852,8 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 （PSW2）与 `aircraft_present_switch`（PSW4）的状态。两者都为 `true` 或
 都为 `false` 时允许关盖；只有一个为 `true` 时阻止关盖。条件满足后运动继续
 执行，开关随后变化不会因此停止。`module_reached_switch`（PSW1）不参与该关盖
-条件，但关闭方向回零时作为零点触发开关。回零成功后关门坐标为 `0`，开门坐标
+条件，但关闭方向回零时作为零点触发开关。电机驱动器必须预先配置正确的回零方向
+与运动参数，MCU 不会在回零过程中读取或改写这些参数。回零成功后关门坐标为 `0`，开门坐标
 为 `-427000`，单位均为电机侧 `0.1deg`。RK 下发的 `door_close` API 不受按钮
 触发条件限制。
 

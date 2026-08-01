@@ -19,7 +19,7 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current STM32 firmware version: `0x0033`.
+Current STM32 firmware version on this test branch: `0x0036`.
 Current RK3588 `interceptorctl` version: `20260701-1`.
 
 ## Files
@@ -106,14 +106,14 @@ The verified flash flow on `jjj` is:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x0033_mcu_motor_communication.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0036_close_switch_homing_driver_params.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x0033_mcu_motor_communication.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0036_close_switch_homing_driver_params.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs
@@ -170,10 +170,12 @@ to change the wait timeout.
 ./interceptorctl motor door trap --pos 181900 --speed 3000 --accel 100 --wait --timeout 20
 ```
 
-`home` starts the close-side homing test. The MCU temporarily changes the motor
-homing direction, waits for PSW1, stops homing, clears the motor coordinate,
-verifies position zero, and finally disables the motor. A successful asynchronous
-event uses `reason=homing_switch_zeroed`. `home-stop` cancels this sequence.
+`home` starts the close-side homing test. The motor driver must already contain
+the required homing direction and motion parameters; the MCU does not read or
+rewrite those parameters. The MCU starts homing, waits for PSW1, stops homing,
+allows the driver to settle, clears and verifies position zero, and finally
+disables the motor. A successful asynchronous event uses
+`reason=homing_switch_zeroed`. `home-stop` cancels this sequence.
 After successful homing, the configured close coordinate is `0` and the open
 coordinate is `-427000`, both in motor-side `0.1 degree` units. `trap` means
 absolute trapezoid motion in raw motor protocol units. `door`, `motor`, and
