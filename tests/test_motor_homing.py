@@ -9,6 +9,29 @@ from mcu import (
 
 
 class MotorHomingMonitorTest(unittest.TestCase):
+    def test_listener_treats_live_and_latched_stall_as_unsafe(self) -> None:
+        for status in (0x04, 0x08, 0x0C):
+            with self.subTest(status=status):
+                listener = MotorCanListener("can0", logging.getLogger("test"))
+                self.assertTrue(
+                    listener._handle_frame(
+                        MOTOR_CAN_ID,
+                        3,
+                        bytes((0x3A, status, 0x6B, 0, 0, 0, 0, 0)),
+                        now=10.0,
+                    )
+                )
+                self.assertTrue(listener.snapshot()["driver_stall"])
+
+        listener = MotorCanListener("can0", logging.getLogger("test"))
+        listener._handle_frame(
+            MOTOR_CAN_ID,
+            3,
+            bytes.fromhex("3a 00 6b 00 00 00 00 00"),
+            now=10.0,
+        )
+        self.assertFalse(listener.snapshot()["driver_stall"])
+
     def test_listener_records_zero_ack_and_following_position(self) -> None:
         listener = MotorCanListener("can0", logging.getLogger("test"))
 

@@ -1242,7 +1242,7 @@ class MotorCanListener:
                 "homing_raw": homing_raw,
                 "driver_enabled": bool(status_raw & 0x01) if status_raw is not None else False,
                 "driver_reached": bool(status_raw & 0x02) if status_raw is not None else False,
-                "driver_stall": bool(status_raw & 0x08) if status_raw is not None else False,
+                "driver_stall": bool(status_raw & 0x0C) if status_raw is not None else False,
                 "calibed": homing_raw is not None and not homing_calibing and not homing_failed,
                 "calibing": homing_calibing,
                 "calib_failed": homing_failed,

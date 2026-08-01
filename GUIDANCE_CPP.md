@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x0036`（测试分支）
+- MCU 固件版本：`0x0037`（测试分支）
 - RK3588 `interceptorctl` 版本：`20260701-1`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -210,7 +210,7 @@ ls -l /tmp/interceptorctl.sock
 | cmd | args | 说明 |
 | --- | --- | --- |
 | `motor_enable` | `{"target":"door","enabled":true}` | 单电机底层使能或失能，调试和标定用。 |
-| `motor_home` | `{"target":"door","wait":false,"timeout":60}` | 关闭方向回零测试：电机驱动器需预先配置回零方向和运动参数；MCU 不读写这些参数，只负责等待 PSW1、停止、清零、校验和去使能。成功事件为 `action="motor_home"`、`monitor="home"`、`reason="homing_switch_zeroed"`。 |
+| `motor_home` | `{"target":"door","wait":false,"timeout":60}` | 关闭方向回零测试：MCU 先检查 PSW1 和电机状态；堵转直接失败且不自动解堵，PSW1 已触发时不启动电机而直接清零。电机驱动器需预先配置回零参数，MCU 不读写这些参数。成功事件为 `action="motor_home"`、`monitor="home"`、`reason="homing_switch_zeroed"`。 |
 | `motor_home_stop` | `{"target":"door"}` | 停止当前底层回零/校准流程，不等同于 `motor_stop`。 |
 | `motor_trapezoid` | `{"target":"door","position":181900,"speed":3000,"accel":100,"wait":false,"timeout":20}` | 单电机绝对位置梯形运动，标定用。运动中再次下发会更新目标。 |
 | `motor_stop` | `{}` | MCU 软件电机停止，调试用。 |
@@ -229,7 +229,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x0036"}
+{"ok":true,"version":"0x0037"}
 ```
 
 字段说明：
@@ -853,7 +853,9 @@ S8050 低边开关，输出 bit 为 `1` 表示对应 LED 通道点亮。
 都为 `false` 时允许关盖；只有一个为 `true` 时阻止关盖。条件满足后运动继续
 执行，开关随后变化不会因此停止。`module_reached_switch`（PSW1）不参与该关盖
 条件，但关闭方向回零时作为零点触发开关。电机驱动器必须预先配置正确的回零方向
-与运动参数，MCU 不会在回零过程中读取或改写这些参数。回零成功后关门坐标为 `0`，开门坐标
+与运动参数，MCU 不会在回零过程中读取或改写这些参数。回零前 MCU 会先消抖读取
+PSW1，并读取电机状态。实时堵转或堵转保护会直接结束回零，不会自动发送解堵指令；
+PSW1 已经触发时不会发送使能或回零启动指令，只执行去使能、清零和校验。回零成功后关门坐标为 `0`，开门坐标
 为 `-427000`，单位均为电机侧 `0.1deg`。RK 下发的 `door_close` API 不受按钮
 触发条件限制。
 

@@ -958,7 +958,7 @@ struct MotionEvent {
     /** @brief Motor driver reached bit decoded from the raw CAN status byte. */
     bool can_reached = false;
 
-    /** @brief Motor driver stall/protection bit decoded from the raw CAN status byte. */
+    /** @brief Live-stall or latched stall-protection state decoded from the raw CAN status byte. */
     bool can_stall = false;
 
     /** @brief Homing/calibration completed flag reported by MCU when monitor is "home". */
