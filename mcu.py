@@ -49,8 +49,8 @@ CMD_ID_INTERCEPTOR_AC_STATUS = 19
 CMD_ID_INTERCEPTOR_AC_CONTROL = 20
 CMD_ID_INTERCEPTOR_SWITCH_STATUS = 21
 
-DOOR_OPEN_POSITION_0P1DEG = 10000
-DOOR_CLOSE_POSITION_0P1DEG = 437000
+DOOR_OPEN_POSITION_0P1DEG = -427000
+DOOR_CLOSE_POSITION_0P1DEG = 0
 DOOR_OPEN_SPEED_0P1RPM = 15000
 DOOR_OPEN_ACCEL_RPM_S = 2000
 DOOR_CLOSE_SPEED_0P1RPM = 7000
@@ -1155,6 +1155,28 @@ def public_ok_from_ack(ack: Dict[str, Any]) -> Dict[str, Any]:
     return {"ok": True}
 
 
+def close_homing_zero_verified(
+    snapshot: Dict[str, Any],
+    motion_start_time: float,
+    tolerance_0p1deg: int = RK_OBSERVED_REACHED_TOLERANCE_0P1DEG,
+) -> bool:
+    zeroed_seen = snapshot.get("zeroed_seen_time")
+    position_seen = snapshot.get("position_seen_time")
+    status_seen = snapshot.get("status_seen_time")
+    position = snapshot.get("position")
+    if zeroed_seen is None or float(zeroed_seen) < float(motion_start_time):
+        return False
+    if position_seen is None or float(position_seen) < float(zeroed_seen):
+        return False
+    if status_seen is None or float(status_seen) < float(position_seen):
+        return False
+    return (
+        position is not None
+        and abs(int(position)) <= int(tolerance_0p1deg)
+        and not bool(snapshot.get("driver_enabled"))
+    )
+
+
 class MotorCanListener:
     def __init__(self, iface: str, logger: logging.Logger):
         self.iface = iface
@@ -1170,10 +1192,12 @@ class MotorCanListener:
         self._last_position_seen: Optional[float] = None
         self._last_status_seen: Optional[float] = None
         self._last_homing_seen: Optional[float] = None
+        self._last_zeroed_seen: Optional[float] = None
         self._rx_count = 0
         self._position_rx_count = 0
         self._status_rx_count = 0
         self._homing_rx_count = 0
+        self._zeroed_rx_count = 0
 
     def start(self) -> None:
         if self._thread is not None:
@@ -1197,6 +1221,7 @@ class MotorCanListener:
             position_age = None if self._last_position_seen is None else max(0.0, now - self._last_position_seen)
             status_age = None if self._last_status_seen is None else max(0.0, now - self._last_status_seen)
             homing_age = None if self._last_homing_seen is None else max(0.0, now - self._last_homing_seen)
+            zeroed_age = None if self._last_zeroed_seen is None else max(0.0, now - self._last_zeroed_seen)
             status_raw = self._status_raw
             homing_raw = self._homing_raw
             homing_calibing = bool(homing_raw & 0x04) if homing_raw is not None else False
@@ -1205,15 +1230,19 @@ class MotorCanListener:
                 "position": self._position_0p1deg,
                 "age_s": age,
                 "position_age_s": position_age,
+                "position_seen_time": self._last_position_seen,
                 "status_age_s": status_age,
+                "status_seen_time": self._last_status_seen,
                 "homing_age_s": homing_age,
                 "homing_seen_time": self._last_homing_seen,
+                "zeroed_age_s": zeroed_age,
+                "zeroed_seen_time": self._last_zeroed_seen,
                 "communicated": age is not None and age <= 1.0,
                 "status_raw": status_raw,
                 "homing_raw": homing_raw,
                 "driver_enabled": bool(status_raw & 0x01) if status_raw is not None else False,
                 "driver_reached": bool(status_raw & 0x02) if status_raw is not None else False,
-                "driver_stall": bool(status_raw & 0x08) if status_raw is not None else False,
+                "driver_stall": bool(status_raw & 0x0C) if status_raw is not None else False,
                 "calibed": homing_raw is not None and not homing_calibing and not homing_failed,
                 "calibing": homing_calibing,
                 "calib_failed": homing_failed,
@@ -1221,8 +1250,49 @@ class MotorCanListener:
                 "position_rx_count": self._position_rx_count,
                 "status_rx_count": self._status_rx_count,
                 "homing_rx_count": self._homing_rx_count,
+                "zeroed_rx_count": self._zeroed_rx_count,
                 "iface": self.iface,
             }
+
+    def _handle_frame(self, can_id: int, dlc: int, data: bytes, now: Optional[float] = None) -> bool:
+        if (can_id & CAN_EFF_MASK) != MOTOR_CAN_ID:
+            return False
+        frame_time = time.monotonic() if now is None else float(now)
+        if dlc >= 3 and data[0] == 0x0A and data[1] == 0x02 and data[2] == 0x6B:
+            with self._lock:
+                self._last_zeroed_seen = frame_time
+                self._last_seen = frame_time
+                self._rx_count += 1
+                self._zeroed_rx_count += 1
+            return True
+        if dlc >= 7 and data[0] == 0x36 and data[6] == 0x6B:
+            angle = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5]
+            if data[1] == 0x01:
+                angle = -angle
+            with self._lock:
+                self._position_0p1deg = int(angle)
+                self._last_seen = frame_time
+                self._last_position_seen = frame_time
+                self._rx_count += 1
+                self._position_rx_count += 1
+            return True
+        if dlc >= 3 and data[0] == 0x3A and data[2] == 0x6B:
+            with self._lock:
+                self._status_raw = int(data[1])
+                self._last_seen = frame_time
+                self._last_status_seen = frame_time
+                self._rx_count += 1
+                self._status_rx_count += 1
+            return True
+        if dlc >= 3 and data[0] == 0x3B and data[2] == 0x6B:
+            with self._lock:
+                self._homing_raw = int(data[1])
+                self._last_seen = frame_time
+                self._last_homing_seen = frame_time
+                self._rx_count += 1
+                self._homing_rx_count += 1
+            return True
+        return False
 
     def _run(self) -> None:
         if not hasattr(socket, "AF_CAN"):
@@ -1248,35 +1318,7 @@ class MotorCanListener:
             if len(frame) < CAN_FRAME_STRUCT.size:
                 continue
             can_id, dlc, data = CAN_FRAME_STRUCT.unpack(frame)
-            if (can_id & CAN_EFF_MASK) != MOTOR_CAN_ID:
-                continue
-            now = time.monotonic()
-            if dlc >= 7 and data[0] == 0x36 and data[6] == 0x6B:
-                angle = (data[2] << 24) | (data[3] << 16) | (data[4] << 8) | data[5]
-                if data[1] == 0x01:
-                    angle = -angle
-                with self._lock:
-                    self._position_0p1deg = int(angle)
-                    self._last_seen = now
-                    self._last_position_seen = now
-                    self._rx_count += 1
-                    self._position_rx_count += 1
-                continue
-            if dlc >= 3 and data[0] == 0x3A and data[2] == 0x6B:
-                with self._lock:
-                    self._status_raw = int(data[1])
-                    self._last_seen = now
-                    self._last_status_seen = now
-                    self._rx_count += 1
-                    self._status_rx_count += 1
-                continue
-            if dlc >= 3 and data[0] == 0x3B and data[2] == 0x6B:
-                with self._lock:
-                    self._homing_raw = int(data[1])
-                    self._last_seen = now
-                    self._last_homing_seen = now
-                    self._rx_count += 1
-                    self._homing_rx_count += 1
+            self._handle_frame(can_id, dlc, data)
 
 
 class McuClient:
@@ -1342,11 +1384,15 @@ class McuClient:
         return {
             "position": None,
             "age_s": None,
+            "position_seen_time": None,
+            "status_seen_time": None,
             "communicated": False,
             "status_raw": None,
             "homing_raw": None,
             "homing_age_s": None,
             "homing_seen_time": None,
+            "zeroed_age_s": None,
+            "zeroed_seen_time": None,
             "driver_enabled": False,
             "driver_reached": False,
             "driver_stall": False,
@@ -1369,6 +1415,8 @@ class McuClient:
         position = snapshot.get("position")
         target = motion.get("target_position")
         error = int(position) - int(target) if position is not None and target is not None else None
+        zeroed_seen = snapshot.get("zeroed_seen_time")
+        zeroed_after_start = zeroed_seen is not None and float(zeroed_seen) >= float(motion.get("start_time", now))
         event: Dict[str, Any] = {
             "ok": True,
             "motion_ok": event_type == "motion_reached",
@@ -1392,6 +1440,8 @@ class McuClient:
             "can_status": snapshot.get("status_raw"),
             "can_homing_age_s": snapshot.get("homing_age_s"),
             "can_homing_status": snapshot.get("homing_raw"),
+            "can_zeroed": zeroed_after_start,
+            "can_zeroed_age_s": snapshot.get("zeroed_age_s"),
             "can_enabled": bool(snapshot.get("driver_enabled")),
             "can_reached": bool(snapshot.get("driver_reached")),
             "can_stall": bool(snapshot.get("driver_stall")),
@@ -1421,7 +1471,8 @@ class McuClient:
             "motion event type=%s event_id=%s motion_id=%s action=%s reason=%s elapsed=%.3fs "
             "target=%s/0.1deg position=%s/0.1deg error=%s tolerance=%s "
             "can=%s age=%s status=%s enabled=%s reached=%s stall=%s "
-            "homing_status=%s homing_age=%s calibed=%s calibing=%s calib_failed=%s",
+            "homing_status=%s homing_age=%s zeroed=%s zeroed_age=%s "
+            "calibed=%s calibing=%s calib_failed=%s",
             event.get("type"),
             event.get("event_id"),
             event.get("motion_id"),
@@ -1440,6 +1491,8 @@ class McuClient:
             event.get("can_stall"),
             event.get("can_homing_status"),
             event.get("can_homing_age_s"),
+            event.get("can_zeroed"),
+            event.get("can_zeroed_age_s"),
             event.get("calibed"),
             event.get("calibing"),
             event.get("calib_failed"),
@@ -1541,17 +1594,28 @@ class McuClient:
                 if active.get("monitor") == "home":
                     homing_seen = snapshot.get("homing_seen_time")
                     fresh_homing = homing_seen is not None and float(homing_seen) >= float(active.get("start_time", now))
+                    zeroed_seen = snapshot.get("zeroed_seen_time")
+                    fresh_zeroed = zeroed_seen is not None and float(zeroed_seen) >= float(active.get("start_time", now))
+                    zero_verified = close_homing_zero_verified(
+                        snapshot,
+                        float(active.get("start_time", now)),
+                    )
                     if fresh_homing and bool(snapshot.get("calibing")):
                         active["home_progress_seen"] = True
 
                     if fresh_homing and bool(snapshot.get("calib_failed")):
                         event = self._finish_active_motion_locked("motion_failed", "homing_failed", snapshot)
-                    elif fresh_homing and bool(snapshot.get("calibed")):
-                        event = self._finish_active_motion_locked("motion_reached", "homing_done", snapshot)
+                    elif zero_verified:
+                        event = self._finish_active_motion_locked(
+                            "motion_reached",
+                            "homing_switch_zeroed",
+                            snapshot,
+                            {"calibed": True, "calibing": False, "calib_failed": False},
+                        )
                     elif bool(snapshot.get("driver_stall")):
                         event = self._finish_active_motion_locked("motion_failed", "driver_stall", snapshot)
                     elif elapsed >= float(active.get("timeout", MOTION_ASYNC_TIMEOUT_S)):
-                        reason = "homing_timeout" if fresh_homing else "homing_status_lost"
+                        reason = "homing_zero_verify_timeout" if fresh_zeroed else "homing_switch_timeout"
                         event = self._finish_active_motion_locked("motion_timeout", reason, snapshot)
                 else:
                     position = snapshot.get("position")

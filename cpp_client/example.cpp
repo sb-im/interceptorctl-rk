@@ -210,6 +210,8 @@ int main() {
      *                 << " can_status=0x" << std::hex << event.can_status << std::dec
      *                 << " can_homing_status=0x" << std::hex << event.can_homing_status << std::dec
      *                 << " can_homing_age=" << event.can_homing_age_s << "s"
+     *                 << " can_zeroed=" << std::boolalpha << event.can_zeroed
+     *                 << " can_zeroed_age=" << event.can_zeroed_age_s << "s"
      *                 << " can_enabled=" << std::boolalpha << event.can_enabled
      *                 << " can_reached=" << event.can_reached
      *                 << " can_stall=" << event.can_stall
@@ -220,7 +222,8 @@ int main() {
      *
      *       if (event.event_type == interceptorctl::MotionEventType::Reached) {
      *           // position monitor: target tolerance reached.
-     *           // home monitor: homing completed, reason == "homing_done".
+     *           // home monitor: PSW1 reached and zero verified,
+     *           // reason == "homing_switch_zeroed".
      *       } else if (event.event_type == interceptorctl::MotionEventType::Timeout ||
      *                  event.event_type == interceptorctl::MotionEventType::Failed ||
      *                  event.event_type == interceptorctl::MotionEventType::Canceled) {

@@ -946,13 +946,19 @@ struct MotionEvent {
     /** @brief Age of the latest motor homing CAN frame, in seconds. Negative means unknown. */
     double can_homing_age_s = -1.0;
 
+    /** @brief Whether a position-clear acknowledgement was observed after this homing command started. */
+    bool can_zeroed = false;
+
+    /** @brief Age of the latest motor position-clear acknowledgement, in seconds. Negative means unknown. */
+    double can_zeroed_age_s = -1.0;
+
     /** @brief Motor driver enable bit decoded from the raw CAN status byte. */
     bool can_enabled = false;
 
     /** @brief Motor driver reached bit decoded from the raw CAN status byte. */
     bool can_reached = false;
 
-    /** @brief Motor driver stall/protection bit decoded from the raw CAN status byte. */
+    /** @brief Live-stall or latched stall-protection state decoded from the raw CAN status byte. */
     bool can_stall = false;
 
     /** @brief Homing/calibration completed flag reported by MCU when monitor is "home". */
@@ -1285,7 +1291,8 @@ public:
      * for asynchronous homing events even when wait is false.
      *
      * @note Completion is reported through start_motion_event_thread() as
-     * action="motor_home", monitor="home", reason="homing_done" on success.
+     * action="motor_home", monitor="home", reason="homing_switch_zeroed"
+     * after the close-side switch is reached and the zero position is verified.
      */
     MotionActionResult motor_home(
         const std::string& target,

@@ -19,7 +19,7 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current STM32 firmware version: `0x0033`.
+Current STM32 firmware version on this test branch: `0x0037`.
 Current RK3588 `interceptorctl` version: `20260701-1`.
 
 ## Files
@@ -106,14 +106,14 @@ The verified flash flow on `jjj` is:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x0033_mcu_motor_communication.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0037_homing_precheck.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x0033_mcu_motor_communication.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0037_homing_precheck.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs
@@ -170,9 +170,20 @@ to change the wait timeout.
 ./interceptorctl motor door trap --pos 181900 --speed 3000 --accel 100 --wait --timeout 20
 ```
 
-`home` starts low-level motor homing/calibration. `home-stop` sends the motor
-driver homing-stop command. `trap` means absolute trapezoid motion in raw motor
-protocol units. `door`, `motor`, and `motor1` select the linked motor.
+`home` starts the close-side homing test. The motor driver must already contain
+the required homing direction and motion parameters; the MCU does not read or
+rewrite those parameters. Before enabling the motor, the MCU debounces PSW1 and
+reads the motor status. A live stall or latched stall protection terminates the
+request without enabling, homing, or automatically clearing the protection. If
+PSW1 is already active, the MCU does not start homing and only disables, clears,
+and verifies position zero. Otherwise it starts homing, waits for PSW1, stops
+homing, allows the driver to settle, clears and verifies position zero, and
+finally disables the motor. A successful asynchronous event uses
+`reason=homing_switch_zeroed`. `home-stop` cancels this sequence.
+After successful homing, the configured close coordinate is `0` and the open
+coordinate is `-427000`, both in motor-side `0.1 degree` units. `trap` means
+absolute trapezoid motion in raw motor protocol units. `door`, `motor`, and
+`motor1` select the linked motor.
 
 ### GPpower3000 Power Supply
 
@@ -277,8 +288,9 @@ only when `aircraft_position_switch` (PSW2) and
 `aircraft_present_switch` (PSW4) have the same state: both active or both
 inactive. A request is blocked when exactly one input is active. The inputs
 are sampled only when the button triggers the close; changing them after
-motion starts does not stop the motion. `module_reached_switch` (PSW1) is
-status-only and is not part of this close interlock.
+motion starts does not stop the motion. `module_reached_switch` (PSW1) is not
+part of this close interlock, but the close-side homing test uses it as the
+zero-position trigger.
 
 ### Air Conditioner
 

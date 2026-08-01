@@ -729,6 +729,8 @@ MotionEvent parse_motion_event_line(const std::string& raw) {
     event.can_status = get_int(member(root, "can_status"), -1);
     event.can_homing_status = get_int(member(root, "can_homing_status"), -1);
     event.can_homing_age_s = get_double(member(root, "can_homing_age_s"), -1.0);
+    event.can_zeroed = get_bool(member(root, "can_zeroed"));
+    event.can_zeroed_age_s = get_double(member(root, "can_zeroed_age_s"), -1.0);
     event.can_enabled = get_bool(member(root, "can_enabled"));
     event.can_reached = get_bool(member(root, "can_reached"));
     event.can_stall = get_bool(member(root, "can_stall"));

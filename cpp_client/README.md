@@ -148,8 +148,8 @@ Important conventions:
   handling. A cover-button request to close is accepted when PSW2 and PSW4
   have the same state: both active or both inactive. The request is blocked
   when exactly one input is active. The MCU does not keep checking them after
-  motion starts. PSW1 is status-only and does not participate in this
-  condition.
+  motion starts. PSW1 does not participate in this condition, but the
+  close-side homing sequence uses it as the zero-position trigger.
 - `air_conditioner_status()` reads HCNC4A air-conditioner status cached by the
   MCU UART5 plaintext Modbus state machine.
 - Air-conditioner temperature unit is `0.1C`; DC voltage/current units are
@@ -206,6 +206,10 @@ if (!home.result.ok) {
 
 std::cout << "accepted homing motion_id=" << home.motion_id << "\n";
 
+// Success is delivered asynchronously with reason="homing_switch_zeroed".
+// The calibrated close coordinate is 0 and the open coordinate is -427000,
+// both in motor-side 0.1 degree units.
+
 auto move = dock.motor_trapezoid(
     interceptorctl::MotorTarget::Door,
     181900,  // 18190.0 deg motor-side absolute position
@@ -245,6 +249,7 @@ dock.start_motion_event_thread([](const interceptorctl::MotionEvent& event) {
                   << " position=" << event.position_0p1deg << "/0.1deg"
                   << " error=" << event.error_0p1deg << "/0.1deg"
                   << " calibed=" << event.calibed
+                  << " can_zeroed=" << event.can_zeroed
                   << " elapsed=" << event.elapsed_s << "s\n";
     } else if (event.event_type == interceptorctl::MotionEventType::Timeout ||
                event.event_type == interceptorctl::MotionEventType::Failed ||
