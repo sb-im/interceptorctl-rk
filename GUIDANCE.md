@@ -21,7 +21,7 @@
 - 客户程序、测试脚本、调度程序都通过 `/tmp/interceptorctl.sock` 发 JSON 请求。
 - 每个请求是一行 UTF-8 JSON，以 `\n` 结尾；每个回复也是一行 JSON。
 - socket 路径默认是 `/tmp/interceptorctl.sock`。
-- 当前测试分支 MCU 固件版本是 `0x0037`，RK3588 `interceptorctl` 版本是 `20260701-1`。
+- 当前正式 MCU 固件版本是 `0x0037`，RK3588 `interceptorctl` 使用 `main` 正式分支。
 
 启动 daemon：
 

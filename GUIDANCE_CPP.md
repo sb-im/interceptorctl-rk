@@ -6,8 +6,8 @@
 
 当前版本：
 
-- MCU 固件版本：`0x0037`（测试分支）
-- RK3588 `interceptorctl` 版本：`20260701-1`
+- MCU 固件版本：`0x0037`（正式版本）
+- RK3588 `interceptorctl` 分支：`main`
 - Unix socket：`/tmp/interceptorctl.sock`
 
 ## 1. 通信方式

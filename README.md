@@ -19,8 +19,8 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current STM32 firmware version on this test branch: `0x0037`.
-Current RK3588 `interceptorctl` version: `20260701-1`.
+Current released STM32 firmware version: `0x0037`.
+Current RK3588 `interceptorctl` release branch: `main`.
 
 ## Files
 
