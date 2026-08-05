@@ -19,8 +19,20 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current released STM32 firmware version: `0x0037`.
+Current released STM32 firmware version: `0x0039`.
 Current RK3588 `interceptorctl` release branch: `main`.
+
+Firmware selection:
+
+- `0x0039`: default release. Uses PSW1 close-direction homing and automatic
+  recovery from transient motor state-machine/CAN transaction failures.
+- `0x0038`: compatibility release. Keeps the original `0x0033` motor-driver
+  homing behavior and adds the same automatic recovery mechanism.
+
+Both versions keep motor communication polling inside the MCU motor module at
+a 1-second interval. A failed transaction no longer leaves the MCU permanently
+stuck in its motor error state. Recovery never resumes the interrupted target
+automatically and does not automatically clear motor stall protection.
 
 ## Files
 
@@ -106,14 +118,14 @@ The verified flash flow on `jjj` is:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x0037_homing_precheck.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0039_close_switch_home_auto_recovery.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x0037_homing_precheck.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x0039_close_switch_home_auto_recovery.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs
