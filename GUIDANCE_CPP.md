@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x0039`（默认正式版本；原电机驱动回零设备使用兼容版本 `0x0038`）
+- MCU 固件版本：`0x003A`（默认正式版本；原电机驱动回零设备使用兼容版本 `0x0038`）
 - RK3588 `interceptorctl` 分支：`main`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -229,7 +229,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x0039"}
+{"ok":true,"version":"0x003A"}
 ```
 
 字段说明：
