@@ -19,15 +19,18 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current released STM32 firmware version: `0x003A`.
+Current released STM32 firmware version: `0x003B`.
 Current RK3588 `interceptorctl` release branch: `main`.
 
 Firmware selection:
 
-- `0x003A`: default release. Keeps the `0x0039` close-switch homing and motor
+- `0x003B`: default release. Keeps the `0x0039` close-switch homing and motor
   recovery behavior. The physical cover button opens to motor position
-  `-34500/0.1deg`, approximately 90 degrees at the cover. API `door open`
+  `-345000/0.1deg` (`-34500` motor-side degrees), approximately 90 degrees at
+  the cover. API `door open`
   retains the full-open target `-427000/0.1deg`.
+- `0x003A`: withdrawn because its button target used an incorrect 0.1-degree
+  conversion. Do not flash this version.
 - `0x0039`: previous release. Uses PSW1 close-direction homing and automatic
   recovery from transient motor state-machine/CAN transaction failures.
 - `0x0038`: compatibility release. Keeps the original `0x0033` motor-driver
@@ -122,14 +125,14 @@ The verified flash flow on `jjj` is:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003A_button_90deg_open.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003B_button_90deg_open.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003A_button_90deg_open.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003B_button_90deg_open.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs

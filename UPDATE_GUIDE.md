@@ -133,10 +133,11 @@ find tools -maxdepth 1 -type f -name 'sbdock_0x*.bin' -printf '%f\n' | sort -V
 ```text
 tools/sbdock_0x0038_legacy_home_auto_recovery.bin
 tools/sbdock_0x0039_close_switch_home_auto_recovery.bin
-tools/sbdock_0x003A_button_90deg_open.bin
+tools/sbdock_0x003B_button_90deg_open.bin
 ```
 
-- `0x003A`：默认正式版本，使用 PSW1 关门方向回零；实体按钮开盖约 90°，API 完整开盖目标不变。
+- `0x003B`：默认正式版本，使用 PSW1 关门方向回零；实体按钮开盖到电机侧 `-34500°`，API 完整开盖目标不变。
+- `0x003A`：因 `0.1°` 单位换算错误已作废，最新仓库不再提供该固件，不得烧录。
 - `0x0039`：上一正式版本，使用 PSW1 关门方向回零。
 - `0x0038`：兼容版本，保留 `0x0033` 的原电机驱动回零方式。
 - 上述版本都包含电机错误自动恢复；瞬时 CAN/ACK 故障不再让 MCU 永久停留在错误状态。
@@ -147,7 +148,7 @@ tools/sbdock_0x003A_button_90deg_open.bin
 ```text
 0x0038  71764 bytes  SHA256 58ee5e79ed49a03e70fef37bcf7cc4a3265260c0d3b9285648a5ba74f90e2c2b
 0x0039  73960 bytes  SHA256 cb83f6bfeb021e6d8d5f45c57ae62948b22f67828ef876cc774e26f3e5e173d6
-0x003A  73984 bytes  SHA256 4db04d1253843152d4c2482c142007bee8ef4878ac262a9754662e2e85c5bdc5
+0x003B  73984 bytes  SHA256 62f552cec1bd3118ba61fdf6fba7a7476d1b4853eeec95894416ef8e2fbeaafa
 ```
 
 ### 3.2 烧录前预演
@@ -156,7 +157,7 @@ tools/sbdock_0x003A_button_90deg_open.bin
 
 ```bash
 sudo /usr/bin/python3 tools/flash_mcu.py --dry-run \
-  tools/sbdock_0x003A_button_90deg_open.bin
+  tools/sbdock_0x003B_button_90deg_open.bin
 ```
 
 确认板型、固件路径和 `/dev/mcu` 均正确后再执行正式烧录。
@@ -165,7 +166,7 @@ sudo /usr/bin/python3 tools/flash_mcu.py --dry-run \
 
 ```bash
 sudo /usr/bin/python3 tools/flash_mcu.py \
-  tools/sbdock_0x003A_button_90deg_open.bin
+  tools/sbdock_0x003B_button_90deg_open.bin
 ```
 
 烧录工具会自动完成以下操作：
@@ -188,10 +189,10 @@ systemctl is-active interceptorctl.service
 ./interceptorctl power status
 ```
 
-使用默认 `0x003A` 固件时，版本回读应为：
+使用默认 `0x003B` 固件时，版本回读应为：
 
 ```text
-0x003A
+0x003B
 ```
 
 版本正确且服务为 `active` 后，固件更新才算完成。
