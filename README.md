@@ -22,8 +22,16 @@ Only command ACK/data responses are expected during normal operation.
 Current released STM32 firmware version: `0x003B`.
 Current RK3588 `interceptorctl` release branch: `main`.
 
+The `test/aircraft-fan-psw5` branch additionally contains MCU test firmware
+`0x003C`. It configures `PD11/PSW5` as the 12 V two-wire fan switch and turns
+the fan on only while both PSW2 and PSW4 are stably active. This firmware is
+not a production release until field verification is complete.
+
 Firmware selection:
 
+- `0x003C`: test firmware on `test/aircraft-fan-psw5`; adds automatic aircraft
+  fan control on `PD11/PSW5`. Do not deploy as the default production firmware
+  before field verification.
 - `0x003B`: default release. Keeps the `0x0039` close-switch homing and motor
   recovery behavior. The physical cover button opens to motor position
   `-345000/0.1deg` (`-34500` motor-side degrees), approximately 90 degrees at
