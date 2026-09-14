@@ -19,12 +19,18 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current released STM32 firmware version: `0x003B`.
+Current released STM32 firmware version: `0x003C`.
 Current RK3588 `interceptorctl` release branch: `main`.
+
+Firmware `0x003C` configures `PD11/PSW5` as the 12 V two-wire fan switch and
+turns the fan on only while both PSW2 and PSW4 are stably active. The fan
+behavior was field-verified on `itc-004.local` on 2026-09-14.
 
 Firmware selection:
 
-- `0x003B`: default release. Keeps the `0x0039` close-switch homing and motor
+- `0x003C`: default release; adds field-verified automatic aircraft fan control
+  on `PD11/PSW5`.
+- `0x003B`: previous release. Keeps the `0x0039` close-switch homing and motor
   recovery behavior. The physical cover button opens to motor position
   `-345000/0.1deg` (`-34500` motor-side degrees), approximately 90 degrees at
   the cover. API `door open`
