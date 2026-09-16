@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x003D`（支持实体按钮 90°/120° 开盖角度配置）
+- MCU 固件版本：`0x003E`（支持实体按钮 90°/120° 开盖角度配置及独立 MCU 回读）
 - RK3588 `interceptorctl` 分支：`main`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -231,7 +231,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x003D"}
+{"ok":true,"version":"0x003E"}
 ```
 
 字段说明：
@@ -347,9 +347,12 @@ ls -l /tmp/interceptorctl.sock
 `angle` 只允许 `90` 或 `120`。设置仅影响实体按钮触发的开盖动作；API
 `door_open` 和急停解除后的自动开盖仍使用完整 120° 目标。回复中的
 `button_open_angle_deg` 是所选配置，`applied_angle_deg` 是 MCU 当前回读值，
+`mcu_readback_command_id` 在 `0x003E` 上为独立回读命令 `23`。设置操作会先
+发送命令 22，再发送命令 23；只有独立回读值与目标一致才返回成功并持久化。
 `applied` 表示两者一致，`supported` 表示当前固件是否支持。设置成功后保存在
 `/home/orangepi/.config/interceptorctl/settings.json`，daemon 启动、串口重连或
-MCU 独立复位后都会自动核验并重新下发。最低支持固件为 `0x003D`。
+MCU 独立复位后都会自动核验并重新下发。最低配置固件为 `0x003D`；该版本
+使用命令 22 的兼容查询，`0x003E` 及以上使用独立命令 23。
 
 `wait:false` 是默认推荐值，daemon 只等待 MCU ack；`wait:true` 时，daemon 会轮询 `motor_status`，直到 `motor.active == "idle"` 或超时。
 

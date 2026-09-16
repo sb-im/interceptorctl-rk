@@ -19,16 +19,19 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current released STM32 firmware version: `0x003D`.
+Current released STM32 firmware version: `0x003E`.
 Current RK3588 `interceptorctl` release branch: `main`.
 
-Firmware `0x003D` keeps the field-verified `PD11/PSW5` automatic aircraft fan
-control from `0x003C` and adds a runtime 90/120-degree physical cover-button
-open-angle setting.
+Firmware `0x003E` keeps the field-verified fan and runtime 90/120-degree
+physical cover-button setting, and adds dedicated MCU command 23 for reading
+back the effective angle.
 
 Firmware selection:
 
-- `0x003D`: default release; adds the runtime physical-button open-angle setting.
+- `0x003E`: default release; adds dedicated physical-button angle readback and
+  verifies every setting with a separate MCU read after command 22.
+- `0x003D`: previous release; adds the runtime physical-button open-angle setting
+  and supports legacy readback through an empty command-22 request.
 - `0x003C`: previous release; adds field-verified automatic aircraft fan control
   on `PD11/PSW5`.
 - `0x003B`: previous release. Keeps the `0x0039` close-switch homing and motor
@@ -83,8 +86,10 @@ reboot. To force an administrator-managed value instead, uncomment
 `/etc/default/interceptorctl` and restart the service.
 
 The daemon applies the selected angle after startup in a background worker, so
-the local socket is not delayed when the MCU is still booting. It periodically
-verifies the value and reapplies it after an MCU reset or serial reconnect.
+the local socket is not delayed when the MCU is still booting. It performs a
+separate MCU readback after every setting, periodically verifies the value, and
+reapplies it after an MCU reset or serial reconnect. Firmware `0x003E` uses
+dedicated command 23; `0x003D` remains compatible through command 22.
 Firmware older than `0x003D` remains usable: the daemon logs that this setting
 is unsupported and continues serving all older commands.
 
@@ -160,21 +165,21 @@ On the RK3588 board, MCU firmware is stored under:
 /home/orangepi/interceptorctl/tools/
 ```
 
-Current artifact: `sbdock_0x003D_button_open_angle_config.bin` (`74620` bytes,
-SHA256 `8c52ad45631d01f577ae64fccb3a47bfecbf35035799cb68e951f6bca1378449`).
+Current artifact: `sbdock_0x003E_button_angle_readback.bin` (`74684` bytes,
+SHA256 `4eeecd32905a10edd38f8c00312d430de52b79d28e07607a936d1c4769f3e0e1`).
 
 Flash command:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003D_button_open_angle_config.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003E_button_angle_readback.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003D_button_open_angle_config.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003E_button_angle_readback.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs
@@ -229,8 +234,10 @@ The JSON socket equivalents are:
 ```
 
 Responses include `button_open_angle_deg`, `configured_angle_deg`,
-`applied_angle_deg`, `applied`, `supported`, `firmware_version`, `status`, and
-`persisted`. The setting command is accepted only for 90 or 120 degrees.
+`applied_angle_deg`, `mcu_readback_command_id`, `applied`, `supported`,
+`firmware_version`, `status`, and `persisted`. On `0x003E`, a successful set is
+reported only after dedicated MCU command 23 reads back the requested value.
+The setting command is accepted only for 90 or 120 degrees.
 
 ### Low-Level Motor Debug
 

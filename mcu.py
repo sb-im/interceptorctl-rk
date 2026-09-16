@@ -49,9 +49,11 @@ CMD_ID_INTERCEPTOR_AC_STATUS = 19
 CMD_ID_INTERCEPTOR_AC_CONTROL = 20
 CMD_ID_INTERCEPTOR_SWITCH_STATUS = 21
 CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE = 22
+CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET = 23
 
 MANUAL_OPEN_ANGLES_DEG = (90, 120)
 MANUAL_OPEN_ANGLE_MIN_FIRMWARE = 0x003D
+MANUAL_OPEN_ANGLE_DEDICATED_GET_MIN_FIRMWARE = 0x003E
 
 DOOR_OPEN_POSITION_0P1DEG = -427000
 DOOR_CLOSE_POSITION_0P1DEG = 0
@@ -101,6 +103,7 @@ CMD_NAMES = {
     (CMD_SET_INTERCEPTOR, CMD_ID_INTERCEPTOR_AC_CONTROL): "ac_control",
     (CMD_SET_INTERCEPTOR, CMD_ID_INTERCEPTOR_SWITCH_STATUS): "switch_status",
     (CMD_SET_INTERCEPTOR, CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE): "manual_open_angle",
+    (CMD_SET_INTERCEPTOR, CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET): "manual_open_angle_get",
 }
 
 MOTOR_TARGET_NAMES = {
@@ -865,6 +868,9 @@ def decode_tx_payload(cmd_set: int, cmd_id: int, payload: bytes) -> str:
                 return f"angle={payload[0]}deg {raw}"
             return f"query=current_angle {raw}"
 
+        if cmd_set == CMD_SET_INTERCEPTOR and cmd_id == CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET:
+            return f"query=current_angle_dedicated {raw}"
+
         if cmd_set == CMD_SET_INTERCEPTOR and cmd_id in (
             CMD_ID_INTERCEPTOR_AIRCRAFT_TRANSFER,
             CMD_ID_INTERCEPTOR_POWER_RAW_TRANSFER,
@@ -926,8 +932,12 @@ def decode_rx_summary(cmd_set: int, cmd_id: int, data: bytes) -> str:
             CMD_ID_INTERCEPTOR_LED_SET,
             CMD_ID_INTERCEPTOR_AC_CONTROL,
             CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE,
+            CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET,
         ) and len(data) >= 1:
-            if cmd_id == CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE and len(data) >= 2:
+            if cmd_id in (
+                CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE,
+                CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET,
+            ) and len(data) >= 2:
                 return f"result={data[0]} angle={data[1]}deg {raw}"
             return f"result={data[0]} {raw}"
 
@@ -1784,7 +1794,10 @@ class McuClient:
         return resp
 
     @staticmethod
-    def _manual_open_angle_response(ack: Dict[str, Any]) -> Dict[str, Any]:
+    def _manual_open_angle_response(
+        ack: Dict[str, Any],
+        command_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
         if not ack.get("ok"):
             return {"ok": False, "error": ack.get("error", "manual open angle request failed")}
         data = ack.get("data") or b""
@@ -1798,6 +1811,8 @@ class McuClient:
             "button_open_angle_deg": applied_angle,
             "applied_angle_deg": applied_angle,
         }
+        if command_id is not None:
+            response["command_id"] = command_id
         if result != 0:
             response["error"] = f"mcu result {result}"
         elif applied_angle not in MANUAL_OPEN_ANGLES_DEG:
@@ -1805,14 +1820,19 @@ class McuClient:
             response["error"] = f"MCU returned invalid manual open angle: {applied_angle}"
         return response
 
-    def get_manual_open_angle(self, timeout: float = 2.0) -> Dict[str, Any]:
+    def get_manual_open_angle(self, timeout: float = 2.0, legacy: bool = False) -> Dict[str, Any]:
+        command_id = (
+            CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE
+            if legacy
+            else CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET
+        )
         ack = self.transact(
-            "manual_open_angle_get",
+            "manual_open_angle_get_legacy" if legacy else "manual_open_angle_get",
             CMD_SET_INTERCEPTOR,
-            CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE,
+            command_id,
             timeout=timeout,
         )
-        return self._manual_open_angle_response(ack)
+        return self._manual_open_angle_response(ack, command_id)
 
     def set_manual_open_angle(self, angle: int, timeout: float = 2.0) -> Dict[str, Any]:
         try:
@@ -1828,7 +1848,7 @@ class McuClient:
             bytes([angle]),
             timeout=timeout,
         )
-        return self._manual_open_angle_response(ack)
+        return self._manual_open_angle_response(ack, CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE)
 
     def release_stop(self) -> Dict[str, Any]:
         resp = public_ok_from_ack(self.transact("release_stop", CMD_SET_MOTOR, CMD_ID_MOTOR_RELEASE_STOP))

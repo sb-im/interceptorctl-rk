@@ -15,6 +15,8 @@ class StaticUiTests(unittest.TestCase):
         html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
         javascript = (BASE_DIR / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn('id="button-angle-form"', html)
+        self.assertIn('data-cli="door angle"', html)
+        self.assertIn("mcu_readback_command_id", javascript)
         self.assertIn('<option value="90">90°</option>', html)
         self.assertIn('<option value="120">120°</option>', html)
         self.assertIn('args: ["door", "angle", angle]', javascript)

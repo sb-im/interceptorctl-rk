@@ -185,6 +185,7 @@ function componentRows(id, parsed) {
       return [
         ["配置角度", degreeValue(parsed.configured_angle_deg ?? parsed.button_open_angle_deg)],
         ["MCU 生效角度", parsed.applied_angle_deg == null ? "尚未确认" : degreeValue(parsed.applied_angle_deg)],
+        ["MCU 回读命令", parsed.mcu_readback_command_id == null ? "尚未确认" : `ID ${parsed.mcu_readback_command_id}`],
         ["固件支持", parsed.supported === false ? "不支持" : parsed.supported === true ? "支持" : "待确认"],
         ["配置来源", parsed.source ?? "—"],
         ["持久化", parsed.persisted === true ? "已保存" : parsed.source === "settings_file" ? "未保存" : "使用启动配置"],

@@ -136,9 +136,11 @@ tools/sbdock_0x0039_close_switch_home_auto_recovery.bin
 tools/sbdock_0x003B_button_90deg_open.bin
 tools/sbdock_0x003C_aircraft_fan_psw5.bin
 tools/sbdock_0x003D_button_open_angle_config.bin
+tools/sbdock_0x003E_button_angle_readback.bin
 ```
 
-- `0x003D`：默认正式版本。保留 `0x003C` 的风扇功能，并支持由 RK3588 在运行时设置实体按钮开盖角度为 90° 或 120°；MCU 未收到设置时默认 90°，API 开盖及急停释放仍完整开到 120°。
+- `0x003E`：默认正式版本。保留 `0x003D` 的角度配置功能，新增独立命令 ID 23 回读 MCU 实际生效角度；RK 设置后必须再次回读一致才确认成功。
+- `0x003D`：上一正式版本。保留 `0x003C` 的风扇功能，并支持由 RK3588 在运行时设置实体按钮开盖角度为 90° 或 120°；MCU 未收到设置时默认 90°，API 开盖及急停释放仍完整开到 120°。
 - `0x003C`：上一正式版本。将 PD11/PSW5 配置为风扇输出，PSW2 与 PSW4 同时稳定按下时打开风扇；已于 2026-09-14 在 `itc-004.local` 完成实机验证。
 - `0x003B`：更早正式版本，使用 PSW1 关门方向回零；实体按钮开盖到电机侧 `-34500°`，API 完整开盖目标不变。
 - `0x003A`：因 `0.1°` 单位换算错误已作废，最新仓库不再提供该固件，不得烧录。
@@ -155,6 +157,7 @@ tools/sbdock_0x003D_button_open_angle_config.bin
 0x003B  73984 bytes  SHA256 62f552cec1bd3118ba61fdf6fba7a7476d1b4853eeec95894416ef8e2fbeaafa
 0x003C  74352 bytes  SHA256 ad4379797f6f3879ad31aea974f1f5302f2f55f49c641e75dccbb0c6d83d80a5
 0x003D  74620 bytes  SHA256 8c52ad45631d01f577ae64fccb3a47bfecbf35035799cb68e951f6bca1378449
+0x003E  74684 bytes  SHA256 4eeecd32905a10edd38f8c00312d430de52b79d28e07607a936d1c4769f3e0e1
 ```
 
 ### 3.2 烧录前预演
@@ -163,7 +166,7 @@ tools/sbdock_0x003D_button_open_angle_config.bin
 
 ```bash
 sudo /usr/bin/python3 tools/flash_mcu.py --dry-run \
-  tools/sbdock_0x003D_button_open_angle_config.bin
+  tools/sbdock_0x003E_button_angle_readback.bin
 ```
 
 确认板型、固件路径和 `/dev/mcu` 均正确后再执行正式烧录。
@@ -172,7 +175,7 @@ sudo /usr/bin/python3 tools/flash_mcu.py --dry-run \
 
 ```bash
 sudo /usr/bin/python3 tools/flash_mcu.py \
-  tools/sbdock_0x003D_button_open_angle_config.bin
+  tools/sbdock_0x003E_button_angle_readback.bin
 ```
 
 烧录工具会自动完成以下操作：
@@ -195,10 +198,10 @@ systemctl is-active interceptorctl.service
 ./interceptorctl power status
 ```
 
-使用默认 `0x003D` 固件时，版本回读应为：
+使用默认 `0x003E` 固件时，版本回读应为：
 
 ```text
-0x003D
+0x003E
 ```
 
 版本正确且服务为 `active` 后，固件更新才算完成。

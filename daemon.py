@@ -13,7 +13,14 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from mcu import MANUAL_OPEN_ANGLE_MIN_FIRMWARE, MANUAL_OPEN_ANGLES_DEG, McuClient
+from mcu import (
+    CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE,
+    CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET,
+    MANUAL_OPEN_ANGLE_DEDICATED_GET_MIN_FIRMWARE,
+    MANUAL_OPEN_ANGLE_MIN_FIRMWARE,
+    MANUAL_OPEN_ANGLES_DEG,
+    McuClient,
+)
 
 
 DEFAULT_SOCKET = "/tmp/interceptorctl.sock"
@@ -156,6 +163,7 @@ class ManualOpenAngleController:
         self._applied_angle: Optional[int] = None
         self._supported: Optional[bool] = None
         self._firmware_version: Optional[str] = None
+        self._firmware_version_code: Optional[int] = None
         self._last_error: Optional[str] = None
         self._source = source
         self._persisted = source == "settings_file"
@@ -200,6 +208,17 @@ class ManualOpenAngleController:
                 "applied": supported is True and applied == desired,
                 "supported": supported,
                 "firmware_version": self._firmware_version,
+                "mcu_readback_command_id": (
+                    CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET
+                    if self._firmware_version_code is not None
+                    and self._firmware_version_code >= MANUAL_OPEN_ANGLE_DEDICATED_GET_MIN_FIRMWARE
+                    else (
+                        CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE
+                        if self._firmware_version_code is not None
+                        and self._firmware_version_code >= MANUAL_OPEN_ANGLE_MIN_FIRMWARE
+                        else None
+                    )
+                ),
                 "status": status,
                 "source": self._source,
                 "persisted": self._persisted,
@@ -232,13 +251,57 @@ class ManualOpenAngleController:
             self._set_state(
                 supported=False,
                 firmware_version=version,
+                firmware_version_code=version_code,
                 applied_angle=None,
                 last_error=error,
             )
             self.logger.warning(error)
             return False
-        self._set_state(supported=True, firmware_version=version, last_error=None)
+        self._set_state(
+            supported=True,
+            firmware_version=version,
+            firmware_version_code=version_code,
+            last_error=None,
+        )
         return True
+
+    def _read_mcu_angle(self, timeout: float) -> Dict[str, Any]:
+        with self._state_lock:
+            version_code = self._firmware_version_code
+        legacy = (
+            version_code is not None
+            and version_code < MANUAL_OPEN_ANGLE_DEDICATED_GET_MIN_FIRMWARE
+        )
+        return self.client.get_manual_open_angle(timeout=timeout, legacy=legacy)
+
+    def _set_and_verify(self, angle: int, timeout: float) -> Dict[str, Any]:
+        written = self.client.set_manual_open_angle(angle, timeout=timeout)
+        if not written.get("ok"):
+            return written
+
+        readback = self._read_mcu_angle(timeout=timeout)
+        if not readback.get("ok"):
+            result = dict(readback)
+            result["set_succeeded"] = True
+            result["requested_angle_deg"] = angle
+            return result
+
+        applied = int(readback["button_open_angle_deg"])
+        if applied != angle:
+            return {
+                "ok": False,
+                "error": f"MCU angle readback mismatch: requested {angle}, got {applied}",
+                "requested_angle_deg": angle,
+                "button_open_angle_deg": applied,
+                "applied_angle_deg": applied,
+                "command_id": readback.get("command_id"),
+                "set_succeeded": True,
+            }
+        result = dict(readback)
+        result["requested_angle_deg"] = angle
+        result["set_succeeded"] = True
+        result["verified"] = True
+        return result
 
     def _sync_once(self, force_probe: bool = False) -> Dict[str, Any]:
         with self._io_lock:
@@ -255,7 +318,7 @@ class ManualOpenAngleController:
             # Startup/reconnect must explicitly send the selected value even
             # when it matches the MCU's power-on default.
             if apply_after_probe:
-                response = self.client.set_manual_open_angle(desired, timeout=1.0)
+                response = self._set_and_verify(desired, timeout=1.0)
                 if not response.get("ok"):
                     error = response.get("error", "manual open angle set failed")
                     self._set_state(supported=None, applied_angle=None, last_error=error)
@@ -266,7 +329,7 @@ class ManualOpenAngleController:
                 self.logger.info("manual open angle startup apply: %s degrees", applied)
                 return self._snapshot()
 
-            current = self.client.get_manual_open_angle(timeout=1.0)
+            current = self._read_mcu_angle(timeout=1.0)
             if not current.get("ok"):
                 error = current.get("error", "manual open angle query failed")
                 self._set_state(supported=None, applied_angle=None, last_error=error)
@@ -278,7 +341,7 @@ class ManualOpenAngleController:
             if applied == desired:
                 return self._snapshot()
 
-            response = self.client.set_manual_open_angle(desired, timeout=1.0)
+            response = self._set_and_verify(desired, timeout=1.0)
             if not response.get("ok"):
                 error = response.get("error", "manual open angle set failed")
                 self._set_state(supported=None, applied_angle=applied, last_error=error)
@@ -307,7 +370,7 @@ class ManualOpenAngleController:
                 response["error"] = response.get("last_error", "manual open angle is unavailable")
                 return response
 
-            response = self.client.set_manual_open_angle(parsed_angle, timeout=2.0)
+            response = self._set_and_verify(parsed_angle, timeout=2.0)
             if not response.get("ok"):
                 error = response.get("error", "manual open angle set failed")
                 self._set_state(supported=None, last_error=error)

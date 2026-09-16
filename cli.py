@@ -516,7 +516,8 @@ def print_human(command: str, resp: Dict[str, Any]) -> None:
             f"configured={resp.get('configured_angle_deg', resp.get('button_open_angle_deg'))}deg "
             f"applied={resp.get('applied_angle_deg')}deg "
             f"status={resp.get('status')} supported={resp.get('supported')} "
-            f"persisted={resp.get('persisted')} source={resp.get('source')}"
+            f"persisted={resp.get('persisted')} source={resp.get('source')} "
+            f"mcu_readback_cmd={resp.get('mcu_readback_command_id')}"
         )
         if resp.get("firmware_version"):
             print(f"mcu_version={resp.get('firmware_version')}")

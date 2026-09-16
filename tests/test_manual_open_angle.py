@@ -13,18 +13,20 @@ from daemon import (
 )
 from mcu import (
     CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE,
+    CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET,
     CMD_SET_INTERCEPTOR,
     McuClient,
 )
 
 
 class FakeMcu:
-    def __init__(self, version_code: int = 0x003D, angle: int = 90):
+    def __init__(self, version_code: int = 0x003E, angle: int = 90):
         self.version_code = version_code
         self.angle = angle
         self.calls = []
         self.version_error = None
         self.angle_error = None
+        self.readback_override = None
 
     def read_firmware_version(self, timeout=8.0, attempts=2):
         self.calls.append(("version", timeout, attempts))
@@ -36,14 +38,20 @@ class FakeMcu:
             "version_code": self.version_code,
         }
 
-    def get_manual_open_angle(self, timeout=2.0):
-        self.calls.append(("get", timeout))
+    def get_manual_open_angle(self, timeout=2.0, legacy=False):
+        self.calls.append(("get", timeout, legacy))
         if self.angle_error:
             return {"ok": False, "error": self.angle_error}
+        angle = self.angle if self.readback_override is None else self.readback_override
         return {
             "ok": True,
-            "button_open_angle_deg": self.angle,
-            "applied_angle_deg": self.angle,
+            "button_open_angle_deg": angle,
+            "applied_angle_deg": angle,
+            "command_id": (
+                CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE
+                if legacy
+                else CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET
+            ),
         }
 
     def set_manual_open_angle(self, angle, timeout=2.0):
@@ -82,12 +90,12 @@ class ManualOpenAngleProtocolTest(unittest.TestCase):
         self.assertEqual(captured["cmd_id"], CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE)
         self.assertEqual(captured["payload"], b"\x78")
 
-    def test_get_uses_empty_payload(self) -> None:
+    def test_get_uses_dedicated_command_23_and_empty_payload(self) -> None:
         client = object.__new__(McuClient)
         captured = {}
 
         def transact(name, cmd_set, cmd_id, payload=b"", timeout=6.0):
-            captured["payload"] = payload
+            captured.update(name=name, cmd_set=cmd_set, cmd_id=cmd_id, payload=payload)
             return {"ok": True, "data": bytes((0, 90)), "result": 0}
 
         client.transact = transact
@@ -95,6 +103,23 @@ class ManualOpenAngleProtocolTest(unittest.TestCase):
 
         self.assertTrue(response["ok"])
         self.assertEqual(response["button_open_angle_deg"], 90)
+        self.assertEqual(response["command_id"], CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET)
+        self.assertEqual(captured["cmd_id"], CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET)
+        self.assertEqual(captured["payload"], b"")
+
+    def test_legacy_get_keeps_command_22_compatibility(self) -> None:
+        client = object.__new__(McuClient)
+        captured = {}
+
+        def transact(name, cmd_set, cmd_id, payload=b"", timeout=6.0):
+            captured.update(cmd_id=cmd_id, payload=payload)
+            return {"ok": True, "data": bytes((0, 90)), "result": 0}
+
+        client.transact = transact
+        response = client.get_manual_open_angle(legacy=True)
+
+        self.assertTrue(response["ok"])
+        self.assertEqual(captured["cmd_id"], CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE)
         self.assertEqual(captured["payload"], b"")
 
     def test_invalid_angle_is_rejected_before_serial_write(self) -> None:
@@ -177,8 +202,10 @@ class ManualOpenAngleConfigurationTest(unittest.TestCase):
             status = controller._sync_once()
 
             self.assertTrue(status["applied"])
-            self.assertEqual([call[0] for call in mcu.calls], ["version", "set"])
-            self.assertEqual(mcu.calls[-1][1], 90)
+            self.assertEqual([call[0] for call in mcu.calls], ["version", "set", "get"])
+            self.assertEqual(mcu.calls[1][1], 90)
+            self.assertEqual(mcu.calls[-1][2], False)
+            self.assertEqual(status["mcu_readback_command_id"], 23)
 
     def test_sync_reapplies_after_mcu_returns_to_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -200,6 +227,37 @@ class ManualOpenAngleConfigurationTest(unittest.TestCase):
             self.assertTrue(second["applied"])
             self.assertEqual(mcu.angle, 120)
             self.assertEqual([call[0] for call in mcu.calls].count("set"), 2)
+
+    def test_firmware_003d_uses_legacy_command_22_readback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            mcu = FakeMcu(version_code=0x003D, angle=90)
+            controller = ManualOpenAngleController(
+                mcu,
+                120,
+                str(Path(temp_dir) / "settings.json"),
+                self.logger,
+            )
+
+            status = controller._sync_once()
+
+            self.assertTrue(status["applied"])
+            self.assertEqual(status["mcu_readback_command_id"], 22)
+            get_call = next(call for call in mcu.calls if call[0] == "get")
+            self.assertTrue(get_call[2])
+
+    def test_set_is_not_persisted_when_mcu_readback_mismatches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            settings = str(Path(temp_dir) / "settings.json")
+            mcu = FakeMcu(angle=90)
+            controller = ManualOpenAngleController(mcu, 90, settings, self.logger)
+            controller._sync_once()
+            mcu.readback_override = 90
+
+            response = controller.set_angle(120)
+
+            self.assertFalse(response["ok"])
+            self.assertIn("readback mismatch", response["error"])
+            self.assertFalse(Path(settings).exists())
 
     def test_background_thread_stops_cleanly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
