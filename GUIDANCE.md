@@ -10,9 +10,8 @@
 客户应用
   -> /tmp/interceptorctl.sock
   -> interceptorctl daemon
-  -> /dev/mcu
-  -> STM32 USART1 Package 协议
-  -> 电机 / 电源 / 飞机 485 / 后续硬件
+     -> /dev/mcu -> STM32 USART1 Package 协议 -> 电机运动 / 电源 / 飞机 485 / 后续硬件
+     -> can0 -> 电机驱动器回零参数生产配置（只读/配置，不控制运动）
 ```
 
 规则：
@@ -64,8 +63,8 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 
 - API 读取类：`version`、`manual_open_angle_get`、`stop_status`、`motor_status`、`power_status`、`ups_status`、`env_status`、`led_status`、`switch_status`、`ac_status`。
 - API 控制类：`door_open`、`door_close`、`manual_open_angle_set`、`power_set`、`power_on`、`power_off`、`led_set`、`ac_control`、`aircraft_read`、`aircraft_transfer`。
-- 底层读取/调试类：`status`、`power_raw_transfer`。
-- 底层控制/调试类：`motor_enable`、`motor_trapezoid`、`motor_stop`、`motor_release_stop`。
+- 底层读取/调试类：`status`、`power_raw_transfer`、`motor_can_scan`、`motor_homing_config_get`。
+- 底层控制/调试类：`motor_enable`、`motor_trapezoid`、`motor_stop`、`motor_release_stop`、`motor_homing_config_apply`。
 
 详细参数、返回示例、电机单位和电源错误码说明见 `GUIDANCE_CPP.md`。
 
@@ -74,6 +73,8 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 `switch_status` 用于读取 PSW1/PSW2/PSW3/PSW4 active-low 输入：PSW1/PD15=`module_reached_switch`，PSW2/PD14=`aircraft_position_switch`，PSW3/PD13=`cover_button`，PSW4/PD12=`aircraft_present_switch`。按钮触发手动关盖时，MCU 只在触发瞬间比较 PSW2 与 PSW4：两者都按下或都没按下时允许关盖，只有一个按下时阻止关盖。运动开始后不再检查这两个输入。PSW1 不参与关盖条件，但关闭方向回零时作为零点触发开关。电机驱动器需预先配置正确的回零方向与运动参数，MCU 回零期间不会读取或改写这些参数。回零前 MCU 会先对 PSW1 消抖并读取电机状态；实时堵转或堵转保护会直接终止回零且不会自动解堵，PSW1 已触发时不会启动电机，只执行去使能、清零和校验。
 
 实体按钮角度可通过 `manual_open_angle_get` 查询，通过 `manual_open_angle_set` 的 `{"angle":90}` 或 `{"angle":120}` 设置。`0x003E` 每次设置后使用独立 MCU 命令 ID 23 回读，只有回读值与目标相同才持久化并返回成功；返回字段 `mcu_readback_command_id` 可确认实际使用的回读命令。daemon 启动、串口重连或 MCU 独立复位后会自动重新核验和下发。此配置只影响实体按钮开盖；API 开盖和急停解除后的自动开盖保持完整 120°。
+
+生产调试网页的电机回零参数功能由 daemon 直接使用 RK `can0` 完成。省略电机 ID 时先广播扫描，只有识别到唯一电机才继续；自动配置固定写入无感碰撞回零、CW、300 RPM、120000 ms、检测 80 RPM / 2000 mA / 400 ms、禁用上电自动回零，并请求掉电保存。写入后使用 `0x22` 回读逐字段验证。该流程不会使能电机、触发回零、清零或发送运动命令，配置期间不要按实体开盖按钮。
 
 ## 4. 急停接口
 

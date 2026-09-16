@@ -218,6 +218,38 @@ p { line-height: 1.55; }
 .angle-value { flex: 0 0 auto; min-width: 88px; border: 1px solid rgba(56, 212, 221, 0.34); border-radius: 9px; padding: 0.55rem 0.7rem; color: var(--cyan); background: rgba(56, 212, 221, 0.08); text-align: center; font-size: 0.9rem; }
 .danger-zone { border-color: rgba(251, 102, 114, 0.26); }
 
+.motor-config-card.good { border-color: rgba(88, 211, 148, 0.36); }
+.motor-config-card.warn { border-color: rgba(240, 184, 75, 0.42); }
+.motor-config-card.bad { border-color: rgba(251, 102, 114, 0.45); }
+.motor-config-card.loading { border-color: rgba(56, 212, 221, 0.42); }
+.motor-config-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 0.85rem; }
+.motor-config-heading p { margin: 0.35rem 0 0; color: var(--muted); font-size: 0.8rem; }
+.config-state { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 999px; padding: 0.35rem 0.65rem; color: var(--muted); background: rgba(111, 145, 170, 0.07); font-size: 0.72rem; font-weight: 780; }
+.config-state.good { border-color: rgba(88, 211, 148, 0.35); color: var(--green); background: rgba(88, 211, 148, 0.08); }
+.config-state.warn { border-color: rgba(240, 184, 75, 0.38); color: var(--amber); background: rgba(240, 184, 75, 0.08); }
+.config-state.bad { border-color: rgba(251, 102, 114, 0.4); color: var(--red); background: rgba(251, 102, 114, 0.08); }
+.config-state.loading { border-color: rgba(56, 212, 221, 0.35); color: var(--cyan); background: rgba(56, 212, 221, 0.08); }
+.config-safety-note { display: flex; align-items: center; gap: 0.65rem; margin-bottom: 0.85rem; border: 1px solid rgba(56, 212, 221, 0.18); border-radius: 9px; padding: 0.65rem 0.75rem; background: rgba(56, 212, 221, 0.05); font-size: 0.76rem; }
+.config-safety-note strong { color: var(--cyan); white-space: nowrap; }
+.config-safety-note span { color: var(--muted); }
+.motor-config-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0.75rem; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 9px; background: rgba(8, 13, 19, 0.38); }
+.motor-config-summary > div { display: grid; gap: 0.15rem; padding: 0.65rem 0.75rem; border-left: 1px solid var(--line-soft); }
+.motor-config-summary > div:first-child { border-left: 0; }
+.motor-config-summary span { color: var(--muted); font-size: 0.68rem; }
+.motor-config-summary strong { font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.motor-config-table { margin-bottom: 0.75rem; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; }
+.motor-config-table > div { display: grid; grid-template-columns: minmax(135px, 1.1fr) minmax(120px, 1fr) minmax(120px, 1fr); border-top: 1px solid var(--line-soft); }
+.motor-config-table > div:first-child { border-top: 0; }
+.motor-config-table span, .motor-config-table strong, .motor-config-table output { min-width: 0; padding: 0.55rem 0.7rem; overflow-wrap: anywhere; font-size: 0.74rem; }
+.motor-config-table span { color: var(--muted); }
+.motor-config-table strong, .motor-config-table output { border-left: 1px solid var(--line-soft); font-weight: 720; font-variant-numeric: tabular-nums; }
+.motor-config-table output.matches { color: var(--green); }
+.motor-config-table output.mismatch { color: var(--amber); }
+.motor-config-table-head { color: #b7c6d2; background: rgba(111, 145, 170, 0.08); font-weight: 800; }
+.motor-config-table-head span { color: #b7c6d2; }
+.motor-config-table-head span + span { border-left: 1px solid var(--line-soft); }
+.motor-config-message { min-height: 1.25rem; margin-bottom: 0.75rem !important; }
+
 .button, .icon-button {
   min-height: 40px;
   border: 1px solid transparent;
@@ -339,6 +371,13 @@ input:disabled { opacity: 0.42; }
   .form-grid > .button { width: 100%; }
   .angle-card-heading { flex-direction: column; }
   .angle-value { width: 100%; }
+  .motor-config-heading, .config-safety-note { align-items: flex-start; flex-direction: column; }
+  .config-state { align-self: stretch; text-align: center; }
+  .motor-config-summary { grid-template-columns: 1fr; }
+  .motor-config-summary > div { border-top: 1px solid var(--line-soft); border-left: 0; }
+  .motor-config-summary > div:first-child { border-top: 0; }
+  .motor-config-table { overflow-x: auto; }
+  .motor-config-table > div { min-width: 520px; }
   .check-row { align-items: flex-start; flex-direction: column; gap: 0.2rem; }
 }
 

@@ -13,6 +13,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from motor_can import MotorCanConfigurator
 from mcu import (
     CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE,
     CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET,
@@ -32,6 +33,51 @@ MANUAL_OPEN_ANGLE_DEFAULT = 90
 MANUAL_OPEN_ANGLE_RETRY_S = 1.0
 MANUAL_OPEN_ANGLE_VERIFY_S = 5.0
 MANUAL_OPEN_ANGLE_UNSUPPORTED_RECHECK_S = 60.0
+
+
+def dispatch_motor_can(
+    client: McuClient,
+    operation: str,
+    motor_id: Any = None,
+) -> Dict[str, Any]:
+    """Run one direct SocketCAN operation through the daemon-owned instance."""
+    configurator = getattr(client, "_motor_can_configurator", None)
+    if configurator is None:
+        return {
+            "ok": False,
+            "operation": operation,
+            "error": "motor CAN configurator is unavailable",
+            "transport": "socketcan",
+            "via_mcu": False,
+        }
+
+    try:
+        lock = getattr(client, "_lock", None)
+
+        def run() -> Dict[str, Any]:
+            if operation == "scan":
+                return configurator.scan()
+            if operation == "read":
+                return configurator.read_homing_config(motor_id)
+            if operation == "apply":
+                return configurator.apply_default_homing_config(motor_id)
+            raise ValueError(f"unknown motor CAN operation: {operation}")
+
+        if lock is None:
+            return run()
+        with lock:
+            return run()
+    except Exception as exc:
+        logger = getattr(client, "logger", logging.getLogger("interceptorctl"))
+        logger.exception("motor CAN %s failed", operation)
+        return {
+            "ok": False,
+            "operation": operation,
+            "error": str(exc),
+            "transport": "socketcan",
+            "iface": getattr(configurator, "iface", None),
+            "via_mcu": False,
+        }
 
 
 def parse_manual_open_angle(value: Any) -> Optional[int]:
@@ -570,6 +616,12 @@ def dispatch(
         return client.get_status()
     if cmd == "motor_status":
         return client.get_motor_status()
+    if cmd == "motor_can_scan":
+        return dispatch_motor_can(client, "scan")
+    if cmd == "motor_homing_config_get":
+        return dispatch_motor_can(client, "read", args.get("motor_id", args.get("id")))
+    if cmd == "motor_homing_config_apply":
+        return dispatch_motor_can(client, "apply", args.get("motor_id", args.get("id")))
     if cmd == "stop_status":
         return client.get_stop_status()
     if cmd == "ups_status":
@@ -699,6 +751,11 @@ def main() -> int:
         environment_value=os.environ.get("INTERCEPTOR_MANUAL_OPEN_ANGLE"),
     )
     client = McuClient(args.serial, args.baud, logger)
+    can_iface = os.environ.get("INTERCEPTOR_CAN_IFACE", "can0").strip()
+    if can_iface and can_iface.lower() not in {"0", "false", "off", "none", "disabled"}:
+        client._motor_can_configurator = MotorCanConfigurator(can_iface, logger)
+    else:
+        client._motor_can_configurator = None
     angle_controller = ManualOpenAngleController(
         client,
         manual_open_angle,
@@ -718,7 +775,7 @@ def main() -> int:
 
     logger.info(
         "interceptorctl daemon started serial=%s baud=%s socket=%s log=%s max_bytes=%s max_files=%s "
-        "manual_open_angle=%s source=%s settings=%s",
+        "manual_open_angle=%s source=%s settings=%s can_iface=%s",
         args.serial,
         args.baud,
         args.socket,
@@ -728,6 +785,7 @@ def main() -> int:
         manual_open_angle,
         manual_open_angle_source,
         args.settings_file,
+        can_iface or "disabled",
     )
     try:
         angle_controller.start()

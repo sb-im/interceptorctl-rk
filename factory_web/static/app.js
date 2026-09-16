@@ -42,6 +42,32 @@ const fieldLabels = {
   raw: "原始值",
 };
 
+const angleSourceLabels = {
+  default: "默认值",
+  settings_file: "已保存配置",
+  environment: "环境变量",
+  command_line: "启动参数",
+};
+
+const angleStatusLabels = {
+  applied: "已生效",
+  pending: "等待下发",
+  unavailable: "暂不可用",
+  unsupported: "固件不支持",
+  unsupported_firmware: "固件不支持",
+};
+
+const motorConfigTarget = {
+  mode: 2,
+  direction: 0,
+  homing_speed_rpm: 300,
+  homing_timeout_ms: 120000,
+  collision_speed_rpm: 80,
+  collision_current_ma: 2000,
+  collision_time_ms: 400,
+  power_on_auto_homing: false,
+};
+
 function byId(id) {
   return document.getElementById(id);
 }
@@ -146,6 +172,11 @@ function communication(value) {
   return "未知";
 }
 
+function localizedAngleValue(value, labels) {
+  if (value === null || value === undefined || value === "") return "—";
+  return labels[String(value)] || String(value);
+}
+
 function ledColor(group) {
   if (!group || typeof group !== "object") return "—";
   if (group.red && group.green) return "黄 / 红绿同时";
@@ -186,9 +217,10 @@ function componentRows(id, parsed) {
         ["配置角度", degreeValue(parsed.configured_angle_deg ?? parsed.button_open_angle_deg)],
         ["MCU 生效角度", parsed.applied_angle_deg == null ? "尚未确认" : degreeValue(parsed.applied_angle_deg)],
         ["MCU 回读命令", parsed.mcu_readback_command_id == null ? "尚未确认" : `ID ${parsed.mcu_readback_command_id}`],
+        ["同步状态", localizedAngleValue(parsed.status, angleStatusLabels)],
         ["固件支持", parsed.supported === false ? "不支持" : parsed.supported === true ? "支持" : "待确认"],
-        ["配置来源", parsed.source ?? "—"],
-        ["持久化", parsed.persisted === true ? "已保存" : parsed.source === "settings_file" ? "未保存" : "使用启动配置"],
+        ["配置来源", localizedAngleValue(parsed.source, angleSourceLabels)],
+        ["持久化", parsed.persisted === true || parsed.source === "settings_file" ? "已保存" : parsed.persisted === false ? "未保存" : "使用启动配置"],
         ["最近错误", parsed.last_error ?? parsed.error ?? "无"],
       ];
     case "motor":
@@ -493,6 +525,161 @@ async function executeCommand(args, label, options = {}) {
   return result;
 }
 
+function firstDefined(source, keys) {
+  if (!source || typeof source !== "object") return undefined;
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null) return source[key];
+  }
+  return undefined;
+}
+
+function motorConfigDocument(parsed) {
+  if (!parsed || typeof parsed !== "object") return null;
+  const candidates = [
+    parsed.after,
+    parsed.readback,
+    parsed.current,
+    parsed.config,
+    parsed.homing_config,
+    parsed.parameters,
+  ];
+  return candidates.find((candidate) => candidate && typeof candidate === "object") || null;
+}
+
+function motorConfigValue(config, key) {
+  const aliases = {
+    mode: ["mode", "homing_mode", "home_mode"],
+    direction: ["direction", "homing_direction", "home_direction", "dir"],
+    homing_speed_rpm: ["homing_speed_rpm", "home_speed_rpm", "homing_speed", "home_speed"],
+    homing_timeout_ms: ["homing_timeout_ms", "home_timeout_ms", "homing_timeout", "timeout_ms"],
+    collision_speed_rpm: ["collision_speed_rpm", "sensorless_speed_rpm", "detection_speed_rpm", "detect_speed_rpm"],
+    collision_current_ma: ["collision_current_ma", "sensorless_current_ma", "detection_current_ma", "detect_current_ma"],
+    collision_time_ms: ["collision_time_ms", "sensorless_time_ms", "detection_time_ms", "detect_time_ms"],
+    power_on_auto_homing: ["power_on_auto_homing", "power_on_homing", "auto_homing", "auto_home"],
+    store: ["store", "stored", "save", "saved", "persisted"],
+  };
+  return firstDefined(config, aliases[key] || [key]);
+}
+
+function motorConfigDisplay(key, value, config) {
+  if (value === undefined || value === null || value === "") return "—";
+  if (key === "mode") {
+    const named = firstDefined(config, ["mode_name", "homing_mode_name", "home_mode_name"]);
+    const modes = { 0: "单圈就近回零", 1: "单圈方向回零", 2: "无限位碰撞回零", 3: "限位回零", sensorless: "无限位碰撞回零" };
+    return modes[value] || modes[String(value).toLowerCase()] || named || String(value);
+  }
+  if (key === "direction") {
+    const named = firstDefined(config, ["direction_name", "homing_direction_name", "home_direction_name"]);
+    const directions = { 0: "顺时针（CW）", 1: "逆时针（CCW）", cw: "顺时针（CW）", ccw: "逆时针（CCW）" };
+    return directions[value] || directions[String(value).toLowerCase()] || named || String(value);
+  }
+  if (key === "power_on_auto_homing") {
+    return value === true || value === 1 || value === "1" || String(value).toLowerCase() === "enable" ? "启用" : "禁用";
+  }
+  if (key === "store") {
+    return value === true || value === 1 || value === "1" ? "已请求（协议不提供回读）" : value === false || value === 0 || value === "0" ? "未请求" : String(value);
+  }
+  const suffixes = {
+    homing_speed_rpm: "RPM",
+    homing_timeout_ms: "ms",
+    collision_speed_rpm: "RPM",
+    collision_current_ma: "mA",
+    collision_time_ms: "ms",
+  };
+  return suffixes[key] ? `${value} ${suffixes[key]}` : String(value);
+}
+
+function motorIdFromResult(parsed) {
+  const direct = firstDefined(parsed, ["motor_id", "detected_motor_id", "id", "address"]);
+  if (direct !== undefined) return direct;
+  const list = firstDefined(parsed, ["motors", "motor_ids", "detected_motors", "addresses"]);
+  if (!Array.isArray(list) || list.length !== 1) return undefined;
+  const only = list[0];
+  return only && typeof only === "object" ? firstDefined(only, ["motor_id", "id", "address"]) : only;
+}
+
+function valuesEqual(actual, expected) {
+  if (typeof expected === "boolean") {
+    const normalized = actual === true || actual === 1 || actual === "1" || String(actual).toLowerCase() === "enable";
+    return normalized === expected;
+  }
+  return Number.isFinite(Number(expected)) && Number(actual) === Number(expected);
+}
+
+function motorConfigMatchesTarget(config) {
+  if (!config) return false;
+  return Object.entries(motorConfigTarget).every(([key, expected]) => {
+    const actual = motorConfigValue(config, key);
+    return actual !== undefined && valuesEqual(actual, expected);
+  });
+}
+
+function setMotorConfigTone(tone, label) {
+  const card = byId("motor-config-card");
+  const status = byId("motor-config-status");
+  card.classList.remove("good", "warn", "bad", "loading");
+  if (tone) card.classList.add(tone);
+  status.className = `config-state ${tone || "idle"}`;
+  status.textContent = label;
+}
+
+function renderMotorConfig(result, action) {
+  const parsed = result && result.json;
+  if (!result || !result.ok || !parsed || typeof parsed !== "object" || parsed.ok === false) {
+    setMotorConfigTone("bad", "操作失败");
+    byId("motor-config-message").textContent = result?.stderr || parsed?.error || result?.stdout || "未获得有效 JSON 结果。";
+    byId("motor-config-verified").textContent = "失败";
+    return;
+  }
+
+  const motorId = motorIdFromResult(parsed);
+  if (motorId !== undefined) byId("motor-config-id").textContent = String(motorId);
+  const iface = firstDefined(parsed, ["iface", "interface", "can_interface"]);
+  if (iface) byId("motor-config-iface").textContent = String(iface);
+
+  const config = motorConfigDocument(parsed);
+  if (config) {
+    for (const output of document.querySelectorAll("[data-motor-config]")) {
+      const key = output.dataset.motorConfig;
+      let value = motorConfigValue(config, key);
+      if (key === "store" && value === undefined) value = firstDefined(parsed, ["requested_store", "stored", "store", "saved", "persisted"]);
+      output.textContent = motorConfigDisplay(key, value, config);
+      output.classList.toggle("matches", key !== "store" && motorConfigTarget[key] !== undefined && valuesEqual(value, motorConfigTarget[key]));
+      output.classList.toggle("mismatch", key !== "store" && value !== undefined && motorConfigTarget[key] !== undefined && !valuesEqual(value, motorConfigTarget[key]));
+    }
+  }
+
+  const reportedVerified = firstDefined(parsed, ["verified", "readback_verified", "matches", "configuration_matches"]);
+  const verified = reportedVerified === undefined ? (config ? motorConfigMatchesTarget(config) : null) : Boolean(reportedVerified);
+  byId("motor-config-verified").textContent = verified === true ? "回读一致" : verified === false ? "与目标不一致" : "未校验";
+
+  if (action === "scan") {
+    const found = motorId !== undefined;
+    setMotorConfigTone(found ? "good" : "warn", found ? "已识别" : "未识别");
+    byId("motor-config-message").textContent = found ? `已识别唯一电机，ID = ${motorId}。可以继续回读或自动配置。` : "扫描完成，但没有识别到唯一电机。";
+  } else if (action === "read") {
+    setMotorConfigTone(config ? (verified ? "good" : "warn") : "warn", config ? "回读完成" : "无配置数据");
+    byId("motor-config-message").textContent = config ? (verified ? "当前参数已与自动配置目标一致。" : "当前参数已回读；黄色结果表示仍与自动配置目标不同。") : "命令成功，但返回中没有可展示的配置参数。";
+  } else {
+    setMotorConfigTone(verified ? "good" : "warn", verified ? "配置已验证" : "校验不一致");
+    byId("motor-config-message").textContent = verified ? "参数写入完成，回读值与目标全部一致。" : "写入命令已返回，但回读值与目标不一致，请查看黄色参数和右侧原始 JSON 日志。";
+  }
+}
+
+async function runMotorConfigAction(button) {
+  const action = button.dataset.action;
+  const labels = { scan: "扫描电机 ID", read: "回读电机回零参数", auto: "自动配置电机回零参数" };
+  for (const item of document.querySelectorAll(".motor-config-command")) item.disabled = true;
+  setMotorConfigTone("loading", action === "scan" ? "正在扫描…" : action === "read" ? "正在回读…" : "正在配置…");
+  byId("motor-config-message").textContent = action === "auto" ? "正在写入配置并等待回读校验，电机不会运动。" : "正在等待 CAN 响应…";
+  try {
+    const result = await executeCommand(button.dataset.cli.trim().split(/\s+/), labels[action] || button.textContent);
+    renderMotorConfig(result, action);
+  } finally {
+    for (const item of document.querySelectorAll(".motor-config-command")) item.disabled = false;
+  }
+}
+
 async function refreshOne(id, sourceButton = null, manageTask = true) {
   const spec = state.specs.get(id);
   if (!spec) return null;
@@ -568,6 +755,9 @@ function appendAcTiming(args, data) {
 function bindControls() {
   for (const button of document.querySelectorAll(".fixed-command")) {
     button.addEventListener("click", () => runFromButton(button));
+  }
+  for (const button of document.querySelectorAll(".motor-config-command")) {
+    button.addEventListener("click", () => runMotorConfigAction(button));
   }
 
   bindForm("button-angle-form", (data) => {

@@ -84,6 +84,16 @@ def u8_value(value: str) -> int:
     return out
 
 
+def motor_id_value(value: str) -> int:
+    try:
+        out = int(value, 0)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid motor ID: {value}") from exc
+    if out < 1 or out > 0xFF:
+        raise argparse.ArgumentTypeError(f"motor ID out of range: {value}; expected 1..255")
+    return out
+
+
 def percent_value(value: str) -> int:
     out = u8_value(value)
     if out > 100:
@@ -431,6 +441,40 @@ def print_human(command: str, resp: Dict[str, Any]) -> None:
         else:
             print(f"motor_status: failed error={resp.get('error')}")
         return
+    if command == "motor_can_scan":
+        motor_ids = resp.get("motor_ids") or resp.get("ids") or []
+        print(
+            "motor_can_scan: "
+            f"{'ok' if ack_ok(resp) else 'failed'} iface={resp.get('iface')} "
+            f"motor_ids={motor_ids} error={resp.get('error')}"
+        )
+        for motor in resp.get("motors") or []:
+            print(
+                "motor: "
+                f"id={motor.get('motor_id')} can_id={motor.get('can_id_hex')} "
+                f"version_raw={motor.get('version_raw_hex')}"
+            )
+        return
+    if command in {"motor_homing_config_get", "motor_homing_config_apply"}:
+        config = resp.get("after") or resp.get("config") or resp.get("current") or {}
+        print(
+            f"{command}: {'ok' if ack_ok(resp) else 'failed'} "
+            f"iface={resp.get('iface')} motor_id={resp.get('motor_id')} "
+            f"verified={resp.get('verified')} error={resp.get('error')}"
+        )
+        if config:
+            print(
+                "homing_config: "
+                f"mode={config.get('mode')}({config.get('mode_name')}) "
+                f"direction={config.get('direction')}({config.get('direction_name')}) "
+                f"speed={config.get('homing_speed_rpm')}rpm "
+                f"timeout={config.get('homing_timeout_ms')}ms "
+                f"detect_speed={config.get('collision_speed_rpm')}rpm "
+                f"detect_current={config.get('collision_current_ma')}mA "
+                f"detect_time={config.get('collision_time_ms')}ms "
+                f"power_on_auto_homing={config.get('power_on_auto_homing')}"
+            )
+        return
     if command == "stop_status":
         if resp.get("ok"):
             print(f"estop: hardware={resp.get('hardware_stop')}")
@@ -585,6 +629,9 @@ def build_parser() -> argparse.ArgumentParser:
   ./interceptorctl door angle 120
 
   ./interceptorctl motor status
+  ./interceptorctl motor scan
+  ./interceptorctl motor config read
+  ./interceptorctl motor config auto
   ./interceptorctl motor door enable
   ./interceptorctl motor door disable
   ./interceptorctl motor door home --timeout 60
@@ -658,6 +705,35 @@ units:
     motor = sub.add_parser("motor", help="low-level motor debug commands")
     motor_target = motor.add_subparsers(dest="target", required=True)
     motor_target.add_parser("status", help="read linked single-axis motor status")
+    motor_target.add_parser(
+        "scan",
+        help="scan the single motor on RK SocketCAN without moving it",
+    )
+    motor_config = motor_target.add_parser(
+        "config",
+        help="read or automatically configure motor homing parameters; never starts motion",
+    )
+    motor_config_sub = motor_config.add_subparsers(dest="config_action", required=True)
+    motor_config_read = motor_config_sub.add_parser(
+        "read",
+        help="read homing parameters; omit --id to scan the unique motor",
+    )
+    motor_config_read.add_argument(
+        "--id",
+        dest="motor_id",
+        type=motor_id_value,
+        help="target motor CAN ID, 1..255; omit to scan the unique motor",
+    )
+    motor_config_auto = motor_config_sub.add_parser(
+        "auto",
+        help="write production homing parameters, request storage, and verify readable values without motion",
+    )
+    motor_config_auto.add_argument(
+        "--id",
+        dest="motor_id",
+        type=motor_id_value,
+        help="target motor CAN ID, 1..255; omit to scan the unique motor",
+    )
     for target in ("door", "motor", "motor1"):
         target_parser = motor_target.add_parser(target, help=f"select {target} motor")
         target_sub = target_parser.add_subparsers(dest="action", required=True)
@@ -837,6 +913,14 @@ def command_from_args(args: argparse.Namespace) -> tuple[str, Dict[str, Any]]:
     if args.area == "motor":
         if args.target == "status":
             return "motor_status", {}
+        if args.target == "scan":
+            return "motor_can_scan", {}
+        if args.target == "config":
+            payload = {"motor_id": args.motor_id} if args.motor_id is not None else {}
+            if args.config_action == "read":
+                return "motor_homing_config_get", payload
+            if args.config_action == "auto":
+                return "motor_homing_config_apply", payload
         if args.action in {"enable", "disable"}:
             return "motor_enable", {
                 "target": args.target,

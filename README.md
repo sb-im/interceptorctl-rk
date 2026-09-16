@@ -146,8 +146,10 @@ measurements.
 
 The production/debug web interface is tracked in `factory_web/`. It exposes the
 same JSON CLI operations, shows live system/emergency-stop/switch status, and
-provides the physical-button 90/120-degree selector while keeping the raw JSON
-command log visible.
+provides the physical-button 90/120-degree selector. The low-level motor page
+can also discover the single motor on `can0`, read its homing configuration,
+and apply the production homing configuration with readback verification. The
+raw JSON command log remains visible for every operation.
 
 ```bash
 cd /home/orangepi/interceptorctl/factory_web
@@ -244,6 +246,12 @@ The setting command is accepted only for 90 or 120 degrees.
 ```bash
 ./interceptorctl motor status
 
+./interceptorctl motor scan
+./interceptorctl motor config read
+./interceptorctl motor config read --id 1
+./interceptorctl motor config auto
+./interceptorctl motor config auto --id 1
+
 ./interceptorctl motor door enable
 ./interceptorctl motor door disable
 ./interceptorctl motor door home
@@ -268,6 +276,26 @@ After successful homing, the configured close coordinate is `0` and the open
 coordinate is `-427000`, both in motor-side `0.1 degree` units. `trap` means
 absolute trapezoid motion in raw motor protocol units. `door`, `motor`, and
 `motor1` select the linked motor.
+
+`motor scan` and `motor config ...` are production-commissioning operations
+implemented by the RK daemon directly on SocketCAN. If `--id` is omitted, the
+daemon broadcasts a read-only version query and continues only when exactly
+one motor is found. `config read` reads the driver's current homing parameters.
+`config auto` writes the following fixed production values and then reads them
+back field by field:
+
+- sensorless/collision homing, clockwise direction
+- homing speed `300 RPM`, timeout `120000 ms`
+- collision detection speed `80 RPM`, current `2000 mA`, time `400 ms`
+- power-on automatic homing disabled; non-volatile storage requested
+
+These commands do not enable the driver, start homing, clear position, or issue
+any movement command. The daemon waits for the MCU's periodic CAN status poll
+to finish before sending the multi-frame configuration. Do not press the
+physical cover button while commissioning. The storage request itself is not
+present in the `0x22` readback; all readable parameters are still compared
+strictly, and the JSON result reports the storage operation as requested rather
+than read back.
 
 ### GPpower3000 Power Supply
 

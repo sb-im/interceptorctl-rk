@@ -82,8 +82,8 @@ systemctl status interceptorctl.service --no-pager
 
 - 只有 `interceptorctl daemon` 打开 `/dev/mcu`。
 - 用户、调试脚本、后续客户程序都不直接打开 `/dev/mcu`。
-- RK3588 的 `can0` 可以被动抓包或临时两两测试，但正式电机运动和状态刷新由 MCU 统一发电机 CAN。
-- 不能让 RK3588 正式直接向电机发 `0x36/0x3A` 查询帧，因为 MCU 也会收到这些 CAN 帧，可能污染 MCU 电机状态机。
+- 正式电机运动和常规状态刷新由 MCU 统一发电机 CAN。普通脚本不要直接占用 RK3588 的 `can0` 主动发帧。
+- 唯一例外是 daemon 内置的生产回零参数配置事务：它先等待 MCU 周期轮询结束，再在静默窗口内完成扫描、读取或多帧写入，并严格回读。不要绕过 daemon 自行运行同类脚本，也不要在配置期间按实体按钮。
 
 ## 2. 启动服务
 
