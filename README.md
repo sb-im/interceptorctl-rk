@@ -147,9 +147,10 @@ measurements.
 The production/debug web interface is tracked in `factory_web/`. It exposes the
 same JSON CLI operations, shows live system/emergency-stop/switch status, and
 provides the physical-button 90/120-degree selector. The low-level motor page
-can also discover the single motor on `can0`, read its homing configuration,
-and apply the production homing configuration with readback verification. The
-raw JSON command log remains visible for every operation.
+can also discover the single motor on `can0`, normalize a non-production CAN
+ID to ID 1, read its homing configuration, and apply the production homing
+configuration with readback verification. The raw JSON command log remains
+visible for every operation.
 
 ```bash
 cd /home/orangepi/interceptorctl/factory_web
@@ -278,11 +279,14 @@ absolute trapezoid motion in raw motor protocol units. `door`, `motor`, and
 `motor1` select the linked motor.
 
 `motor scan` and `motor config ...` are production-commissioning operations
-implemented by the RK daemon directly on SocketCAN. If `--id` is omitted, the
-daemon broadcasts a read-only version query and continues only when exactly
-one motor is found. `config read` reads the driver's current homing parameters.
-`config auto` writes the following fixed production values and then reads them
-back field by field:
+implemented by the RK daemon directly on SocketCAN. `motor scan` is read-only.
+`config read` scans when `--id` is omitted, then reads the driver's current
+homing parameters. `config auto` always broadcasts a read-only version query
+and continues only when exactly one motor is found; an optional `--id` is
+treated as an assertion against that scan result. If the discovered ID is not
+1, the daemon first confirms the driver is disabled, persistently changes it
+to ID 1, and broadcasts another scan that must find only ID 1. It then writes
+the following fixed production values and reads them back field by field:
 
 - sensorless/collision homing, clockwise direction
 - homing speed `300 RPM`, timeout `120000 ms`
@@ -290,12 +294,14 @@ back field by field:
 - power-on automatic homing disabled; non-volatile storage requested
 
 These commands do not enable the driver, start homing, clear position, or issue
-any movement command. The daemon waits for the MCU's periodic CAN status poll
-to finish before sending the multi-frame configuration. Do not press the
-physical cover button while commissioning. The storage request itself is not
-present in the `0x22` readback; all readable parameters are still compared
-strictly, and the JSON result reports the storage operation as requested rather
-than read back.
+any movement command. Before changing a non-1 ID, the daemon actively reads its
+status and refuses to continue unless it is explicitly disabled. It also waits
+for the MCU's periodic CAN traffic to finish before sending the multi-frame
+configuration. Do not press the physical cover button while commissioning.
+The ID and homing storage requests are asynchronous and cannot be independently
+proved by their readback commands; the live ID is re-scanned, all readable
+homing parameters are compared strictly, and JSON distinguishes requested
+storage from verified live values.
 
 ### GPpower3000 Power Supply
 

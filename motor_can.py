@@ -5,7 +5,8 @@ This module deliberately exposes only three read/configuration operations:
 
 * discover the one motor attached to the CAN bus;
 * read its homing parameters (command ``0x22``); and
-* write the factory homing parameters (command ``0x4C``) and read them back.
+* normalize the unique motor to factory CAN ID 1, write the factory homing
+  parameters (command ``0x4C``), and read them back.
 
 It never sends enable, stop, homing, position, or any other motion/control
 command.  Multi-frame messages follow the motor firmware implementation: the
@@ -38,16 +39,24 @@ CMD_READ_VERSION = 0x1F
 CMD_READ_HOME_PARAMS = 0x22
 CMD_READ_STATUS = 0x3A
 CMD_WRITE_HOME_PARAMS = 0x4C
+CMD_CHANGE_CAN_ID = 0xAE
 WRITE_HOME_AUX = 0xAE
+CHANGE_CAN_ID_AUX = 0x4B
+FACTORY_MOTOR_ID = 1
 ACK_OK = 0x02
 ACK_CONDITION_ERROR = 0xE2
 ACK_FORMAT_ERROR = 0xEE
 
-# These are the only commands this module is permitted to transmit.  The
-# status command is intentionally absent: it is observed passively only to
-# find a quiet window between the MCU's periodic polls.
+# These are the only commands this module is permitted to transmit.  All are
+# read-only or configuration commands; none can enable or move the motor.
 SAFE_TX_COMMANDS = frozenset(
-    (CMD_READ_VERSION, CMD_READ_HOME_PARAMS, CMD_WRITE_HOME_PARAMS)
+    (
+        CMD_READ_VERSION,
+        CMD_READ_HOME_PARAMS,
+        CMD_READ_STATUS,
+        CMD_WRITE_HOME_PARAMS,
+        CMD_CHANGE_CAN_ID,
+    )
 )
 
 HOME_MODE_NAMES = {
@@ -302,6 +311,10 @@ class MotorCanConfigurator:
         result.update(
             desired=desired.to_dict(),
             requested_store=True,
+            factory_motor_id=FACTORY_MOTOR_ID,
+            motor_id_changed=False,
+            motor_id_change_attempted=False,
+            motor_id_verified=False,
             # 0x22 can verify the live readable parameters, but the protocol
             # offers no independent proof that the asynchronous flash save is
             # durable.  Do not present storage persistence as verified.
@@ -314,12 +327,59 @@ class MotorCanConfigurator:
             sock = None
             try:
                 sock = self._open_socket()
-                resolved_id, motors = self._resolve_motor_id(sock, frames, motor_id)
+                # Automatic production configuration always discovers the
+                # unique motor first.  A supplied ID is an expectation, not a
+                # way to bypass discovery and accidentally target a bus that
+                # contains a different or additional motor.
+                requested_id = (
+                    self._validate_motor_id(motor_id)
+                    if motor_id is not None
+                    else None
+                )
+                resolved_id, motors = self._resolve_motor_id(sock, frames, None)
                 result["motor_id"] = resolved_id
-                if motors is not None:
+                result.update(
+                    original_motor_id=resolved_id,
+                    detected_motor_id=resolved_id,
+                    motor_ids=[item["motor_id"] for item in motors or []],
+                    motors=motors or [],
+                )
+                if requested_id is not None:
+                    result["requested_motor_id"] = requested_id
+                    if requested_id != resolved_id:
+                        raise MotorCanError(
+                            "requested_motor_id_mismatch",
+                            f"requested motor ID {requested_id}, but scan found ID {resolved_id}",
+                            requested_motor_id=requested_id,
+                            detected_motor_id=resolved_id,
+                        )
+
+                if resolved_id != FACTORY_MOTOR_ID:
+                    result["motor_id_change_attempted"] = True
+                    id_change = self._change_motor_id_on_socket(
+                        sock,
+                        frames,
+                        resolved_id,
+                        FACTORY_MOTOR_ID,
+                    )
                     result.update(
-                        motor_ids=[item["motor_id"] for item in motors],
-                        motors=motors,
+                        id_change=id_change,
+                        id_change_ack=id_change["ack"],
+                        id_change_requested_store=True,
+                        id_change_persistence_verifiable=False,
+                        motor_id_changed=True,
+                        motor_id_verified=True,
+                        id_change_verified=True,
+                        post_change_motor_ids=id_change["motor_ids"],
+                        post_change_motors=id_change["motors"],
+                        motor_id=FACTORY_MOTOR_ID,
+                    )
+                    resolved_id = FACTORY_MOTOR_ID
+                else:
+                    result.update(
+                        motor_id=FACTORY_MOTOR_ID,
+                        motor_id_verified=True,
+                        id_change_verified=False,
                     )
 
                 poll_boundary = self._wait_for_mcu_poll_boundary(
@@ -331,6 +391,13 @@ class MotorCanConfigurator:
                     motor_status_raw=poll_boundary["motor_status_raw"],
                     driver_enabled=poll_boundary["driver_enabled"],
                 )
+                if result["motor_id_changed"] and not poll_boundary["observed"]:
+                    raise MotorCanError(
+                        "post_change_status_not_confirmed",
+                        "motor ID changed to 1, but the MCU status poll was not observed; 0x4C was not sent",
+                        motor_id=resolved_id,
+                        poll_boundary=poll_boundary,
+                    )
                 if poll_boundary["driver_enabled"] is True:
                     raise MotorCanError(
                         "driver_enabled",
@@ -528,6 +595,174 @@ class MotorCanConfigurator:
             }
         return [found[motor_id] for motor_id in sorted(found)]
 
+    def _change_motor_id_on_socket(
+        self,
+        sock: Any,
+        frames: List[Dict[str, Any]],
+        old_motor_id: int,
+        new_motor_id: int,
+    ) -> Dict[str, Any]:
+        """Persist a unique motor ID change and prove the live address by scan.
+
+        The motor firmware deliberately acknowledges ``0xAE`` on the old CAN
+        address after switching its runtime filters to the new address.  If
+        that acknowledgement is lost, do not retry blindly: the command may
+        already have taken effect.  A broadcast read-only re-scan is the
+        authoritative runtime check in both cases.
+        """
+
+        old_motor_id = self._validate_motor_id(old_motor_id)
+        new_motor_id = self._validate_motor_id(new_motor_id)
+        if old_motor_id == new_motor_id:
+            raise MotorCanError(
+                "motor_id_already_set",
+                f"motor ID is already {new_motor_id}",
+                motor_id=old_motor_id,
+            )
+
+        change: Dict[str, Any] = {
+            "old_motor_id": old_motor_id,
+            "new_motor_id": new_motor_id,
+            "requested_store": True,
+            "persistence_verifiable": False,
+            "verified": False,
+            "ack": {
+                "received": False,
+                "result": None,
+                "result_hex": None,
+                "name": "timeout",
+                "data_hex": None,
+            },
+        }
+
+        # MCU firmware polls factory ID 1, so a motor at any other ID has no
+        # passive status boundary.  Actively read the old ID and fail closed
+        # unless the driver is explicitly reported disabled.
+        pre_change_status = self._read_status_on_socket(
+            sock,
+            frames,
+            old_motor_id,
+        )
+        change["pre_change_status"] = pre_change_status
+        if pre_change_status["driver_enabled"]:
+            raise MotorCanError(
+                "driver_enabled_before_id_change",
+                "motor driver is enabled; CAN ID was not changed",
+                motor_id=old_motor_id,
+                motor_status_raw=pre_change_status["motor_status_raw"],
+                driver_enabled=True,
+                id_change=change,
+            )
+
+        # Avoid changing the driver's filter while another participant is in
+        # the middle of a transaction.  No motor-control command is sent.
+        if not self._confirm_bus_silence(sock, frames):
+            raise MotorCanError(
+                "bus_not_quiet_for_id_change",
+                "no safe CAN silence window was found; motor ID was not changed",
+                id_change=change,
+            )
+
+        payload = bytes(
+            (
+                CMD_CHANGE_CAN_ID,
+                CHANGE_CAN_ID_AUX,
+                0x01,  # Store permanently.
+                new_motor_id,
+                FRAME_END,
+            )
+        )
+        self._send_frame(sock, frames, old_motor_id << 8, payload)
+
+        try:
+            ack = self._wait_for_change_id_ack(
+                sock,
+                frames,
+                old_motor_id,
+            )
+        except MotorCanError as exc:
+            if exc.code != "change_id_ack_timeout":
+                raise
+            # The command may have succeeded even though its ACK was lost.
+            # Re-scan to report the resulting live state, but fail this
+            # transaction closed.  A fresh invocation can safely continue
+            # from whichever unique ID is then discovered.
+            change["ack_timeout"] = True
+            motors = self._scan_on_socket(sock, frames)
+            motor_ids = [item["motor_id"] for item in motors]
+            change.update(motor_ids=motor_ids, motors=motors)
+            raise MotorCanError(
+                "change_id_ack_timeout",
+                "0xAE acknowledgement was not received; live IDs were re-scanned and 0x4C was not sent",
+                id_change=change,
+                motor_ids=motor_ids,
+                motors=motors,
+            )
+
+        change["ack"] = ack
+        if ack["result"] != ACK_OK:
+            raise MotorCanError(
+                "change_id_rejected",
+                f"motor rejected 0xAE with {ack['result_hex']}",
+                id_change=change,
+                ack=ack,
+            )
+
+        # Prove that the unique live address changed before any 0x4C frame.
+        motors = self._scan_on_socket(sock, frames)
+        motor_ids = [item["motor_id"] for item in motors]
+        change.update(motor_ids=motor_ids, motors=motors)
+        if motor_ids != [new_motor_id]:
+            raise MotorCanError(
+                "change_id_verification_failed",
+                f"expected unique motor ID {new_motor_id} after change, found {motor_ids}",
+                id_change=change,
+                motor_ids=motor_ids,
+                motors=motors,
+            )
+
+        change["verified"] = True
+        return change
+
+    def _read_status_on_socket(
+        self,
+        sock: Any,
+        frames: List[Dict[str, Any]],
+        motor_id: int,
+    ) -> Dict[str, Any]:
+        motor_id = self._validate_motor_id(motor_id)
+        base_id = motor_id << 8
+        self._send_frame(
+            sock,
+            frames,
+            base_id,
+            bytes((CMD_READ_STATUS, FRAME_END)),
+        )
+        deadline = self._monotonic() + self.timeout_s
+        while True:
+            received = self._receive_frame(sock, frames, deadline)
+            if received is None:
+                raise MotorCanError(
+                    "read_status_timeout",
+                    "timed out waiting for the motor's 0x3A status response; CAN ID was not changed",
+                    motor_id=motor_id,
+                )
+            ext_id, packet_index, data = received
+            if (
+                ext_id != base_id
+                or packet_index != 0
+                or len(data) != 3
+                or data[0] != CMD_READ_STATUS
+                or data[-1] != FRAME_END
+            ):
+                continue
+            status_raw = data[1]
+            return {
+                "motor_status_raw": status_raw,
+                "driver_enabled": bool(status_raw & 0x01),
+                "data_hex": _hex_bytes(data),
+            }
+
     def _read_homing_on_socket(
         self,
         sock: Any,
@@ -637,18 +872,27 @@ class MotorCanConfigurator:
             if (
                 ext_id == base_id
                 and packet_index == 0
-                and len(data) >= 3
+                and len(data) == 3
                 and data[0] == CMD_READ_STATUS
                 and data[-1] == FRAME_END
             ):
                 status_raw = data[1]
+                silence_confirmed = self._confirm_bus_silence(sock, frames)
+                if not silence_confirmed:
+                    raise MotorCanError(
+                        "bus_not_quiet_after_status",
+                        "motor status was observed but no complete CAN silence window followed; configuration was not sent",
+                        motor_id=motor_id,
+                        motor_status_raw=status_raw,
+                        driver_enabled=bool(status_raw & 0x01),
+                    )
                 return {
                     "observed": True,
                     "command": CMD_READ_STATUS,
                     "command_hex": "0x3A",
                     "motor_status_raw": status_raw,
                     "driver_enabled": bool(status_raw & 0x01),
-                    "bus_silence_confirmed": None,
+                    "bus_silence_confirmed": True,
                     "data_hex": _hex_bytes(data),
                 }
 
@@ -703,6 +947,46 @@ class MotorCanConfigurator:
             }
             return {
                 "received": True,
+                "result": result,
+                "result_hex": f"0x{result:02X}",
+                "name": names.get(result, "unknown"),
+                "data_hex": _hex_bytes(data),
+            }
+
+    def _wait_for_change_id_ack(
+        self,
+        sock: Any,
+        frames: List[Dict[str, Any]],
+        old_motor_id: int,
+    ) -> Dict[str, Any]:
+        old_base_id = old_motor_id << 8
+        deadline = self._monotonic() + self.timeout_s
+        while True:
+            received = self._receive_frame(sock, frames, deadline)
+            if received is None:
+                raise MotorCanError(
+                    "change_id_ack_timeout",
+                    "timed out waiting for the motor's 0xAE acknowledgement",
+                    old_motor_id=old_motor_id,
+                )
+            ext_id, packet_index, data = received
+            if (
+                ext_id != old_base_id
+                or packet_index != 0
+                or len(data) != 3
+                or data[0] != CMD_CHANGE_CAN_ID
+                or data[-1] != FRAME_END
+            ):
+                continue
+            result = data[1]
+            names = {
+                ACK_OK: "ok",
+                ACK_CONDITION_ERROR: "condition_or_parameter_error",
+                ACK_FORMAT_ERROR: "format_error",
+            }
+            return {
+                "received": True,
+                "response_motor_id": (ext_id >> 8) & 0xFF,
                 "result": result,
                 "result_hex": f"0x{result:02X}",
                 "name": names.get(result, "unknown"),

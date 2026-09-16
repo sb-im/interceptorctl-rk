@@ -662,7 +662,15 @@ function renderMotorConfig(result, action) {
     byId("motor-config-message").textContent = config ? (verified ? "当前参数已与自动配置目标一致。" : "当前参数已回读；黄色结果表示仍与自动配置目标不同。") : "命令成功，但返回中没有可展示的配置参数。";
   } else {
     setMotorConfigTone(verified ? "good" : "warn", verified ? "配置已验证" : "校验不一致");
-    byId("motor-config-message").textContent = verified ? "参数写入完成，回读值与目标全部一致。" : "写入命令已返回，但回读值与目标不一致，请查看黄色参数和右侧原始 JSON 日志。";
+    const originalId = firstDefined(parsed, ["original_motor_id", "detected_motor_id"]);
+    const idChanged = Boolean(firstDefined(parsed, ["motor_id_changed", "id_changed"]));
+    const idVerified = Boolean(firstDefined(parsed, ["motor_id_verified", "id_change_verified"]));
+    const idMessage = idChanged
+      ? `检测到电机 ID ${originalId}，已改为 1 并复扫确认。`
+      : idVerified ? "电机 ID 已确认是 1。" : "";
+    byId("motor-config-message").textContent = verified
+      ? `${idMessage} 回零参数写入完成，回读值与目标全部一致。`.trim()
+      : "写入命令已返回，但回读值与目标不一致，请查看黄色参数和右侧原始 JSON 日志。";
   }
 }
 
@@ -671,7 +679,7 @@ async function runMotorConfigAction(button) {
   const labels = { scan: "扫描电机 ID", read: "回读电机回零参数", auto: "自动配置电机回零参数" };
   for (const item of document.querySelectorAll(".motor-config-command")) item.disabled = true;
   setMotorConfigTone("loading", action === "scan" ? "正在扫描…" : action === "read" ? "正在回读…" : "正在配置…");
-  byId("motor-config-message").textContent = action === "auto" ? "正在写入配置并等待回读校验，电机不会运动。" : "正在等待 CAN 响应…";
+  byId("motor-config-message").textContent = action === "auto" ? "正在扫描唯一电机、校正生产 ID，并写入和回读参数；电机不会运动。" : "正在等待 CAN 响应…";
   try {
     const result = await executeCommand(button.dataset.cli.trim().split(/\s+/), labels[action] || button.textContent);
     renderMotorConfig(result, action);

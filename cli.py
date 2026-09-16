@@ -462,6 +462,14 @@ def print_human(command: str, resp: Dict[str, Any]) -> None:
             f"iface={resp.get('iface')} motor_id={resp.get('motor_id')} "
             f"verified={resp.get('verified')} error={resp.get('error')}"
         )
+        if command == "motor_homing_config_apply" and resp.get("original_motor_id") is not None:
+            print(
+                "motor_can_id: "
+                f"original={resp.get('original_motor_id')} "
+                f"final={resp.get('motor_id')} "
+                f"changed={resp.get('motor_id_changed')} "
+                f"verified={resp.get('motor_id_verified')}"
+            )
         if config:
             print(
                 "homing_config: "
