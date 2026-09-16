@@ -592,6 +592,41 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error_code"], "change_id_verification_failed")
         self.assertEqual(result["motor_ids"], [7])
+        self.assertEqual(result["id_change"]["verification_attempts"], 1)
+        self.assertEqual(
+            unpack_sent(fake).count((0x0100, bytes.fromhex("1F 6B"))),
+            2,
+        )
+        self.assertFalse(any(data[0] == 0x4C for _, data in unpack_sent(fake)))
+
+    def test_apply_exhausts_post_change_retries_when_motor_stays_silent(self) -> None:
+        fake = FakeSocket(
+            [
+                VERSION_ID_7,
+                TIMEOUT,
+                STATUS_DISABLED_7,
+                TIMEOUT,
+                CHANGE_ID_ACK_OLD_7,
+                TIMEOUT,
+                TIMEOUT,
+                TIMEOUT,
+            ]
+        )
+
+        result = configurator(fake).apply_default_homing_config()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "change_id_verification_failed")
+        self.assertEqual(result["motor_ids"], [7])
+        self.assertEqual(result["id_change"]["motor_ids"], [])
+        self.assertEqual(
+            result["id_change"]["verification_attempts"],
+            POST_ID_CHANGE_SCAN_ATTEMPTS,
+        )
+        self.assertEqual(
+            unpack_sent(fake).count((0x0100, bytes.fromhex("1F 6B"))),
+            1 + POST_ID_CHANGE_SCAN_ATTEMPTS,
+        )
         self.assertFalse(any(data[0] == 0x4C for _, data in unpack_sent(fake)))
 
     def test_apply_stops_when_changed_motor_is_enabled_at_id_one(self) -> None:

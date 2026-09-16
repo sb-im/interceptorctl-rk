@@ -788,9 +788,13 @@ class MotorCanConfigurator:
         last_observed: List[Dict[str, Any]] = []
         for attempt in range(1, POST_ID_CHANGE_SCAN_ATTEMPTS + 1):
             motors = self._scan_on_socket(sock, frames)
+            motor_ids = [item["motor_id"] for item in motors]
+            if motor_ids == [expected_motor_id]:
+                return motors, attempt
+            # Retry only a completely silent motor.  A live response from the
+            # old/wrong address, or from multiple motors, is an authoritative
+            # verification failure and must not be hidden by a later sweep.
             if motors:
-                last_observed = motors
-            if [item["motor_id"] for item in motors] == [expected_motor_id]:
                 return motors, attempt
             if attempt != POST_ID_CHANGE_SCAN_ATTEMPTS:
                 self._sleeper(POST_ID_CHANGE_RETRY_INTERVAL_S)
