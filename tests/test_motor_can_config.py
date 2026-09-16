@@ -9,6 +9,8 @@ from motor_can import (
     CAN_FRAME_STRUCT,
     DEFAULT_HOMING_CONFIG,
     MotorCanConfigurator,
+    SCAN_MOTOR_ID_MAX,
+    SCAN_MOTOR_ID_MIN,
     _split_command_payload,
 )
 
@@ -46,6 +48,7 @@ STATUS_ENABLED = can_frame(0x0100, bytes.fromhex("3A 03 6B"))
 STATUS_DISABLED_7 = can_frame(0x0700, bytes.fromhex("3A 02 6B"))
 WRITE_ACK = can_frame(0x0100, bytes((0x4C, ACK_OK, 0x6B)))
 VERSION_ID_1 = can_frame(0x0100, bytes.fromhex("1F 00 07 13 14 6B"))
+VERSION_ID_2 = can_frame(0x0200, bytes.fromhex("1F 00 07 13 14 6B"))
 VERSION_ID_7 = can_frame(0x0700, bytes.fromhex("1F 00 07 13 14 6B"))
 CHANGE_ID_ACK_OLD_7 = can_frame(0x0700, bytes((0xAE, ACK_OK, 0x6B)))
 
@@ -108,6 +111,13 @@ def unpack_sent(fake: FakeSocket) -> list[tuple[int, bytes]]:
     return result
 
 
+def expected_scan_queries() -> list[tuple[int, bytes]]:
+    return [
+        (motor_id << 8, bytes.fromhex("1F 6B"))
+        for motor_id in range(SCAN_MOTOR_ID_MIN, SCAN_MOTOR_ID_MAX + 1)
+    ]
+
+
 class MotorCanPacketTest(unittest.TestCase):
     def test_factory_payload_uses_repeated_command_continuations(self) -> None:
         logical = DEFAULT_HOMING_CONFIG.to_write_payload(store=True)
@@ -135,9 +145,11 @@ class MotorCanPacketTest(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["motor_id"], 1)
         self.assertEqual(result["motor_ids"], [1])
-        self.assertEqual(
-            unpack_sent(fake), [(0x0000, bytes.fromhex("1F 6B"))]
-        )
+        self.assertEqual(result["scan_method"], "targeted")
+        self.assertEqual(result["scan_motor_id_min"], 1)
+        self.assertEqual(result["scan_motor_id_max"], 32)
+        self.assertEqual(unpack_sent(fake), expected_scan_queries())
+        self.assertFalse(any(ext_id == 0 for ext_id, _ in unpack_sent(fake)))
         self.assertTrue(fake.closed)
 
     def test_scan_rejects_more_than_one_motor(self) -> None:
@@ -153,6 +165,29 @@ class MotorCanPacketTest(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error_code"], "multiple_motors_found")
         self.assertEqual(result["motor_ids"], [1, 7])
+
+    def test_scan_detects_id_two_using_only_addressed_queries(self) -> None:
+        fake = FakeSocket([VERSION_ID_2, TIMEOUT])
+
+        result = configurator(fake).scan()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["motor_id"], 2)
+        self.assertEqual(result["motor_ids"], [2])
+        self.assertEqual(unpack_sent(fake), expected_scan_queries())
+        self.assertFalse(any(ext_id == 0 for ext_id, _ in unpack_sent(fake)))
+
+    def test_scan_ignores_response_outside_ids_one_through_32(self) -> None:
+        fake = FakeSocket(
+            [can_frame(0x2100, bytes.fromhex("1F 00 07 13 14 6B")), TIMEOUT]
+        )
+
+        result = configurator(fake).scan()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "motor_not_found")
+        self.assertEqual(result["motor_ids"], [])
+        self.assertEqual(unpack_sent(fake), expected_scan_queries())
 
     def test_read_reassembles_repeated_command_packets(self) -> None:
         fake = FakeSocket(
@@ -259,7 +294,7 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertEqual(
             sent,
             [
-                (0x0000, bytes.fromhex("1F 6B")),
+                *expected_scan_queries(),
                 (0x0100, bytes.fromhex("22 6B")),
                 (0x0100, bytes.fromhex("4C AE 01 02 00 01 2C 00")),
                 (0x0101, bytes.fromhex("4C 01 D4 C0 00 50 07 D0")),
@@ -281,9 +316,7 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertEqual(result["error_code"], "driver_enabled")
         self.assertTrue(result["driver_enabled"])
         self.assertEqual(result["motor_status_raw"], 0x03)
-        self.assertEqual(
-            unpack_sent(fake), [(0x0000, bytes.fromhex("1F 6B"))]
-        )
+        self.assertEqual(unpack_sent(fake), expected_scan_queries())
 
     def test_apply_can_use_confirmed_silent_bus_without_mcu_poll(self) -> None:
         fake = FakeSocket(
@@ -364,10 +397,10 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertEqual(
             sent,
             [
-                (0x0000, bytes.fromhex("1F 6B")),
+                *expected_scan_queries(),
                 (0x0700, bytes.fromhex("3A 6B")),
                 (0x0700, bytes.fromhex("AE 4B 01 01 6B")),
-                (0x0000, bytes.fromhex("1F 6B")),
+                *expected_scan_queries(),
                 (0x0100, bytes.fromhex("22 6B")),
                 (0x0100, bytes.fromhex("4C AE 01 02 00 01 2C 00")),
                 (0x0101, bytes.fromhex("4C 01 D4 C0 00 50 07 D0")),
@@ -424,7 +457,7 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertEqual(
             sent,
             [
-                (0x0000, bytes.fromhex("1F 6B")),
+                *expected_scan_queries(),
                 (0x0700, bytes.fromhex("3A 6B")),
             ],
         )
@@ -524,9 +557,7 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertEqual(result["error_code"], "requested_motor_id_mismatch")
         self.assertEqual(result["requested_motor_id"], 1)
         self.assertEqual(result["detected_motor_id"], 7)
-        self.assertEqual(
-            unpack_sent(fake), [(0x0000, bytes.fromhex("1F 6B"))]
-        )
+        self.assertEqual(unpack_sent(fake), expected_scan_queries())
 
     def test_apply_never_writes_when_initial_scan_finds_multiple_motors(self) -> None:
         fake = FakeSocket([VERSION_ID_1, VERSION_ID_7, TIMEOUT])
@@ -537,7 +568,7 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertEqual(result["error_code"], "multiple_motors_found")
         self.assertEqual(result["motor_ids"], [1, 7])
         sent = unpack_sent(fake)
-        self.assertEqual(sent, [(0x0000, bytes.fromhex("1F 6B"))])
+        self.assertEqual(sent, expected_scan_queries())
 
 
 if __name__ == "__main__":

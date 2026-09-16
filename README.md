@@ -279,14 +279,16 @@ absolute trapezoid motion in raw motor protocol units. `door`, `motor`, and
 `motor1` select the linked motor.
 
 `motor scan` and `motor config ...` are production-commissioning operations
-implemented by the RK daemon directly on SocketCAN. `motor scan` is read-only.
-`config read` scans when `--id` is omitted, then reads the driver's current
-homing parameters. `config auto` always broadcasts a read-only version query
-and continues only when exactly one motor is found; an optional `--id` is
-treated as an assertion against that scan result. If the discovered ID is not
-1, the daemon first confirms the driver is disabled, persistently changes it
-to ID 1, and broadcasts another scan that must find only ID 1. It then writes
-the following fixed production values and reads them back field by field:
+implemented by the RK daemon directly on SocketCAN. Scanning is read-only: it
+sends the version query `1F 6B` directly to candidate motor IDs 1 through 32,
+one ID at a time. It does not use a CAN broadcast request. `config read` uses
+the same directed scan when `--id` is omitted, then reads the driver's current
+homing parameters. `config auto` also scans IDs 1 through 32 and continues only
+when exactly one motor is found; an optional `--id` is treated as an assertion
+against that scan result. If the discovered ID is not 1, the daemon first
+confirms the driver is disabled, persistently changes it to ID 1, and repeats
+the directed 1-through-32 scan, which must find only ID 1. It then writes the
+following fixed production values and reads them back field by field:
 
 - sensorless/collision homing, clockwise direction
 - homing speed `300 RPM`, timeout `120000 ms`

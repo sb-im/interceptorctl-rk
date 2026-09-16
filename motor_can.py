@@ -3,7 +3,7 @@
 
 This module deliberately exposes only three read/configuration operations:
 
-* discover the one motor attached to the CAN bus;
+* discover the one motor at an addressed production ID from 1 through 32;
 * read its homing parameters (command ``0x22``); and
 * normalize the unique motor to factory CAN ID 1, write the factory homing
   parameters (command ``0x4C``), and read them back.
@@ -35,6 +35,8 @@ CAN_EFF_MASK = 0x1FFFFFFF
 CAN_FRAME_STRUCT = struct.Struct("=IB3x8s")
 
 FRAME_END = 0x6B
+SCAN_MOTOR_ID_MIN = 1
+SCAN_MOTOR_ID_MAX = 32
 CMD_READ_VERSION = 0x1F
 CMD_READ_HOME_PARAMS = 0x22
 CMD_READ_STATUS = 0x3A
@@ -250,11 +252,16 @@ class MotorCanConfigurator:
                 motors = self._scan_on_socket(sock, frames)
                 motor_ids = [item["motor_id"] for item in motors]
                 result.update(motor_ids=motor_ids, motors=motors)
+                result.update(
+                    scan_method="targeted",
+                    scan_motor_id_min=SCAN_MOTOR_ID_MIN,
+                    scan_motor_id_max=SCAN_MOTOR_ID_MAX,
+                )
                 if len(motors) != 1:
                     if not motors:
                         raise MotorCanError(
                             "motor_not_found",
-                            "no motor answered the broadcast version query",
+                            "no motor answered targeted version queries for IDs 1..32",
                         )
                     raise MotorCanError(
                         "multiple_motors_found",
@@ -280,6 +287,9 @@ class MotorCanConfigurator:
                     result.update(
                         motor_ids=[item["motor_id"] for item in motors],
                         motors=motors,
+                        scan_method="targeted",
+                        scan_motor_id_min=SCAN_MOTOR_ID_MIN,
+                        scan_motor_id_max=SCAN_MOTOR_ID_MAX,
                     )
                 poll_boundary = self._wait_for_mcu_poll_boundary(
                     sock, frames, resolved_id
@@ -312,6 +322,9 @@ class MotorCanConfigurator:
             desired=desired.to_dict(),
             requested_store=True,
             factory_motor_id=FACTORY_MOTOR_ID,
+            scan_method="targeted",
+            scan_motor_id_min=SCAN_MOTOR_ID_MIN,
+            scan_motor_id_max=SCAN_MOTOR_ID_MAX,
             motor_id_changed=False,
             motor_id_change_attempted=False,
             motor_id_verified=False,
@@ -343,6 +356,9 @@ class MotorCanConfigurator:
                     detected_motor_id=resolved_id,
                     motor_ids=[item["motor_id"] for item in motors or []],
                     motors=motors or [],
+                    scan_method="targeted",
+                    scan_motor_id_min=SCAN_MOTOR_ID_MIN,
+                    scan_motor_id_max=SCAN_MOTOR_ID_MAX,
                 )
                 if requested_id is not None:
                     result["requested_motor_id"] = requested_id
@@ -553,7 +569,7 @@ class MotorCanConfigurator:
         if not motors:
             raise MotorCanError(
                 "motor_not_found",
-                "no motor answered the broadcast version query",
+                "no motor answered targeted version queries for IDs 1..32",
                 motor_ids=motor_ids,
                 motors=motors,
             )
@@ -569,7 +585,14 @@ class MotorCanConfigurator:
     def _scan_on_socket(
         self, sock: Any, frames: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
-        self._send_frame(sock, frames, 0x0000, bytes((CMD_READ_VERSION, FRAME_END)))
+        # Some production motor firmware responds to the address-0 query only
+        # while configured as ID 1.  Never rely on or send a broadcast frame:
+        # probe the agreed production range with addressed, read-only version
+        # queries instead.
+        query = bytes((CMD_READ_VERSION, FRAME_END))
+        for motor_id in range(SCAN_MOTOR_ID_MIN, SCAN_MOTOR_ID_MAX + 1):
+            self._send_frame(sock, frames, motor_id << 8, query)
+
         deadline = self._monotonic() + self.scan_window_s
         found: Dict[int, Dict[str, Any]] = {}
         while True:
@@ -579,7 +602,7 @@ class MotorCanConfigurator:
             ext_id, packet_index, data = received
             motor_id = (ext_id >> 8) & 0xFF
             if (
-                motor_id == 0
+                not SCAN_MOTOR_ID_MIN <= motor_id <= SCAN_MOTOR_ID_MAX
                 or packet_index != 0
                 or len(data) < 3
                 or data[0] != CMD_READ_VERSION
@@ -607,7 +630,7 @@ class MotorCanConfigurator:
         The motor firmware deliberately acknowledges ``0xAE`` on the old CAN
         address after switching its runtime filters to the new address.  If
         that acknowledgement is lost, do not retry blindly: the command may
-        already have taken effect.  A broadcast read-only re-scan is the
+        already have taken effect.  An addressed read-only re-scan is the
         authoritative runtime check in both cases.
         """
 

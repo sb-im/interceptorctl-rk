@@ -13,8 +13,8 @@ class StaticUiTests(unittest.TestCase):
 
     def test_static_assets_use_cache_busting_versions(self):
         html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('/static/styles.css?v=20260916-motor-config-3', html)
-        self.assertIn('/static/app.js?v=20260916-motor-config-3', html)
+        self.assertIn('/static/styles.css?v=20260916-motor-scan-4', html)
+        self.assertIn('/static/app.js?v=20260916-motor-scan-4', html)
 
     def test_button_angle_control_uses_cli_contract(self):
         html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
@@ -56,7 +56,8 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("motorConfigTarget", javascript)
         self.assertIn("motor_id_changed", javascript)
         self.assertIn("motor_id_verified", javascript)
-        self.assertIn("若 ID 不是 1，先改为 1 并复扫确认", html)
+        self.assertIn("扫描会向 ID 1～32 逐个发送只读 1F 6B，不使用广播", html)
+        self.assertIn("正在逐个定向扫描电机 ID 1～32（只读 1F 6B，不使用广播）", javascript)
         self.assertIn("renderMotorConfig(result, action)", javascript)
         self.assertIn("appendLog(label, result)", javascript)
 
