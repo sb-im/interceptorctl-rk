@@ -11,6 +11,11 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn('id="system-status-grid"', html)
         self.assertIn('id="refresh-system"', html)
 
+    def test_static_assets_use_cache_busting_versions(self):
+        html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('/static/styles.css?v=20260916-motor-config-2', html)
+        self.assertIn('/static/app.js?v=20260916-motor-config-2', html)
+
     def test_button_angle_control_uses_cli_contract(self):
         html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
         javascript = (BASE_DIR / "static" / "app.js").read_text(encoding="utf-8")
