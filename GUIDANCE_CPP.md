@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x003B`（默认正式版本；原电机驱动回零设备使用兼容版本 `0x0038`）
+- MCU 固件版本：`0x003D`（支持实体按钮 90°/120° 开盖角度配置）
 - RK3588 `interceptorctl` 分支：`main`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -171,6 +171,7 @@ ls -l /tmp/interceptorctl.sock
 | cmd | args | 说明 |
 | --- | --- | --- |
 | `version` | `{}` | 读取 MCU 固件版本。 |
+| `manual_open_angle_get` | `{}` | 读取实体开盖按钮的配置值、MCU 实际值和同步状态。 |
 | `stop_status` | `{}` | 读取实体急停按钮状态。 |
 | `motor_status` | `{}` | 读取门和平台电机状态。 |
 | `power_status` | `{}` | 读取电源状态，返回值包含温度。 |
@@ -185,6 +186,7 @@ ls -l /tmp/interceptorctl.sock
 | --- | --- | --- |
 | `door_open` | `{"wait":false,"timeout":20}` | 单电机联动门打开。默认只等 MCU ack，不等机械动作完成。 |
 | `door_close` | `{"wait":false,"timeout":20}` | 单电机联动门关闭。运动中再次下发会更新梯形目标。 |
+| `manual_open_angle_set` | `{"angle":120}` | 将实体开盖按钮目标设置为 90° 或 120°，成功后持久化到 RK。 |
 | `power_set` | `{"voltage":2400,"current":100}` | 设置电源目标值，单位 0.01V / 0.01A。 |
 | `power_on` | `{}` | 打开电源输出。 |
 | `power_off` | `{}` | 关闭电源输出。 |
@@ -229,7 +231,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x003B"}
+{"ok":true,"version":"0x003D"}
 ```
 
 字段说明：
@@ -334,6 +336,20 @@ ls -l /tmp/interceptorctl.sock
 
 - `wait`：是否由 daemon 等待动作结束。
 - `timeout`：最大等待时间，单位秒。
+
+实体开盖按钮角度配置：
+
+```json
+{"cmd":"manual_open_angle_get","args":{}}
+{"cmd":"manual_open_angle_set","args":{"angle":120}}
+```
+
+`angle` 只允许 `90` 或 `120`。设置仅影响实体按钮触发的开盖动作；API
+`door_open` 和急停解除后的自动开盖仍使用完整 120° 目标。回复中的
+`button_open_angle_deg` 是所选配置，`applied_angle_deg` 是 MCU 当前回读值，
+`applied` 表示两者一致，`supported` 表示当前固件是否支持。设置成功后保存在
+`/home/orangepi/.config/interceptorctl/settings.json`，daemon 启动、串口重连或
+MCU 独立复位后都会自动核验并重新下发。最低支持固件为 `0x003D`。
 
 `wait:false` 是默认推荐值，daemon 只等待 MCU ack；`wait:true` 时，daemon 会轮询 `motor_status`，直到 `motor.active == "idle"` 或超时。
 

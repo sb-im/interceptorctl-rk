@@ -510,6 +510,19 @@ def print_human(command: str, resp: Dict[str, Any]) -> None:
         if resp.get("wait_error"):
             print(f"wait_error: {resp['wait_error']}")
         return
+    if command in {"manual_open_angle_get", "manual_open_angle_set"}:
+        print(
+            "button_open_angle: "
+            f"configured={resp.get('configured_angle_deg', resp.get('button_open_angle_deg'))}deg "
+            f"applied={resp.get('applied_angle_deg')}deg "
+            f"status={resp.get('status')} supported={resp.get('supported')} "
+            f"persisted={resp.get('persisted')} source={resp.get('source')}"
+        )
+        if resp.get("firmware_version"):
+            print(f"mcu_version={resp.get('firmware_version')}")
+        if resp.get("error") or resp.get("last_error"):
+            print(f"error: {resp.get('error', resp.get('last_error'))}")
+        return
     if command in {"motor_trapezoid", "motor_home"}:
         print(f"{command}: {'accepted' if ack_ok(resp) else 'failed'} error={resp.get('error')}")
         if resp.get("motion_id") is not None:
@@ -567,6 +580,8 @@ def build_parser() -> argparse.ArgumentParser:
   ./interceptorctl estop
   ./interceptorctl stop
   ./interceptorctl release-stop
+  ./interceptorctl door angle
+  ./interceptorctl door angle 120
 
   ./interceptorctl motor status
   ./interceptorctl motor door enable
@@ -636,6 +651,8 @@ units:
         p.add_argument("--no-wait", action="store_false", dest="wait", help=argparse.SUPPRESS)
         p.set_defaults(wait=False)
         p.add_argument("--timeout", type=float, default=20.0, help="seconds to wait for motion completion, default: 20")
+    angle = door_sub.add_parser("angle", help="read or set the physical cover-button open angle")
+    angle.add_argument("degrees", type=int, nargs="?", choices=(90, 120), help="90 or 120; omit to query")
 
     motor = sub.add_parser("motor", help="low-level motor debug commands")
     motor_target = motor.add_subparsers(dest="target", required=True)
@@ -811,6 +828,10 @@ def command_from_args(args: argparse.Namespace) -> tuple[str, Dict[str, Any]]:
     if args.area == "release-stop":
         return "motor_release_stop", {}
     if args.area == "door":
+        if args.action == "angle":
+            if args.degrees is None:
+                return "manual_open_angle_get", {}
+            return "manual_open_angle_set", {"angle": args.degrees}
         return f"door_{args.action}", {"wait": args.wait, "timeout": args.timeout}
     if args.area == "motor":
         if args.target == "status":

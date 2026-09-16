@@ -21,7 +21,7 @@
 - 客户程序、测试脚本、调度程序都通过 `/tmp/interceptorctl.sock` 发 JSON 请求。
 - 每个请求是一行 UTF-8 JSON，以 `\n` 结尾；每个回复也是一行 JSON。
 - socket 路径默认是 `/tmp/interceptorctl.sock`。
-- 当前正式 MCU 固件版本是 `0x003B`，RK3588 `interceptorctl` 使用 `main` 正式分支。实体按钮开盖约 90°，API `door open` 仍执行完整开盖。仍使用原电机驱动回零方式的设备可选择兼容固件 `0x0038`。
+- 当前正式 MCU 固件版本是 `0x003D`，RK3588 `interceptorctl` 使用 `main` 正式分支。实体按钮开盖可配置为 90° 或 120°，API `door open` 仍执行完整 120° 开盖。
 
 启动 daemon：
 
@@ -48,7 +48,7 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 回复也是一行 JSON。客户默认 API 只保留业务字段，例如：
 
 ```json
-{"ok":true,"version":"0x003B"}
+{"ok":true,"version":"0x003D"}
 ```
 
 通用字段：
@@ -62,8 +62,8 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 
 当前命令表已拆成四类：
 
-- API 读取类：`version`、`stop_status`、`motor_status`、`power_status`、`ups_status`、`env_status`、`led_status`、`switch_status`、`ac_status`。
-- API 控制类：`door_open`、`door_close`、`power_set`、`power_on`、`power_off`、`led_set`、`ac_control`、`aircraft_read`、`aircraft_transfer`。
+- API 读取类：`version`、`manual_open_angle_get`、`stop_status`、`motor_status`、`power_status`、`ups_status`、`env_status`、`led_status`、`switch_status`、`ac_status`。
+- API 控制类：`door_open`、`door_close`、`manual_open_angle_set`、`power_set`、`power_on`、`power_off`、`led_set`、`ac_control`、`aircraft_read`、`aircraft_transfer`。
 - 底层读取/调试类：`status`、`power_raw_transfer`。
 - 底层控制/调试类：`motor_enable`、`motor_trapezoid`、`motor_stop`、`motor_release_stop`。
 
@@ -72,6 +72,8 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 空调 `ac_control` 目前支持远程开关、强制制冷/加热、正常/静音模式、监控湿度下发，以及制冷启动温度、制冷回差、加热启动温度、加热回差、除湿设定点写入。写入后用 `ac_status` 回读确认实际寄存器值。
 
 `switch_status` 用于读取 PSW1/PSW2/PSW3/PSW4 active-low 输入：PSW1/PD15=`module_reached_switch`，PSW2/PD14=`aircraft_position_switch`，PSW3/PD13=`cover_button`，PSW4/PD12=`aircraft_present_switch`。按钮触发手动关盖时，MCU 只在触发瞬间比较 PSW2 与 PSW4：两者都按下或都没按下时允许关盖，只有一个按下时阻止关盖。运动开始后不再检查这两个输入。PSW1 不参与关盖条件，但关闭方向回零时作为零点触发开关。电机驱动器需预先配置正确的回零方向与运动参数，MCU 回零期间不会读取或改写这些参数。回零前 MCU 会先对 PSW1 消抖并读取电机状态；实时堵转或堵转保护会直接终止回零且不会自动解堵，PSW1 已触发时不会启动电机，只执行去使能、清零和校验。
+
+实体按钮角度可通过 `manual_open_angle_get` 查询，通过 `manual_open_angle_set` 的 `{"angle":90}` 或 `{"angle":120}` 设置。成功设置后 RK 会持久化，并在 daemon 启动、串口重连或 MCU 独立复位后自动重新核验和下发。此配置只影响实体按钮开盖；API 开盖和急停解除后的自动开盖保持完整 120°。
 
 ## 4. 急停接口
 

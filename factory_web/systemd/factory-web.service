@@ -1,0 +1,17 @@
+[Unit]
+Description=Interceptorctl graphical menu
+Wants=network-online.target interceptorctl.service
+After=network-online.target interceptorctl.service
+
+[Service]
+Type=simple
+User=orangepi
+Group=orangepi
+WorkingDirectory=/home/orangepi/interceptorctl/factory_web
+EnvironmentFile=-/home/orangepi/interceptorctl/factory_web/config/factory-web.env
+ExecStart=/usr/bin/python3 -m uvicorn app:app --host 0.0.0.0 --port 8080 --no-proxy-headers
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

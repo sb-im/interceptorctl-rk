@@ -19,16 +19,17 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current released STM32 firmware version: `0x003C`.
+Current released STM32 firmware version: `0x003D`.
 Current RK3588 `interceptorctl` release branch: `main`.
 
-Firmware `0x003C` configures `PD11/PSW5` as the 12 V two-wire fan switch and
-turns the fan on only while both PSW2 and PSW4 are stably active. The fan
-behavior was field-verified on `itc-004.local` on 2026-09-14.
+Firmware `0x003D` keeps the field-verified `PD11/PSW5` automatic aircraft fan
+control from `0x003C` and adds a runtime 90/120-degree physical cover-button
+open-angle setting.
 
 Firmware selection:
 
-- `0x003C`: default release; adds field-verified automatic aircraft fan control
+- `0x003D`: default release; adds the runtime physical-button open-angle setting.
+- `0x003C`: previous release; adds field-verified automatic aircraft fan control
   on `PD11/PSW5`.
 - `0x003B`: previous release. Keeps the `0x0039` close-switch homing and motor
   recovery behavior. The physical cover button opens to motor position
@@ -58,6 +59,8 @@ automatically and does not automatically clear motor stall protection.
 - `interceptorctl`: shell wrapper for `cli.py`.
 - `run.sh`: starts `daemon.py`.
 - `systemd/interceptorctl.service`: boot-time systemd service.
+- `systemd/interceptorctl.default`: optional boot-time angle/settings overrides.
+- `factory_web/`: production/debug browser interface and optional service template.
 - `tools/install_service.sh`: installs and enables `interceptorctl.service`.
 - `tools/flash_mcu.py`: independent STM32 firmware flashing tool.
 - `main.py`: legacy HTTP debug service kept for reference.
@@ -69,6 +72,21 @@ cd /home/orangepi/interceptorctl
 sudo ./tools/install_service.sh
 systemctl status interceptorctl.service
 ```
+
+`install_service.sh` creates `/etc/default/interceptorctl` only when it does not
+already exist, so upgrades preserve administrator overrides. The physical
+cover-button open angle defaults to 90 degrees. A setting made with
+`interceptorctl door angle 90|120` is stored atomically in
+`/home/orangepi/.config/interceptorctl/settings.json` and is restored after a
+reboot. To force an administrator-managed value instead, uncomment
+`INTERCEPTOR_MANUAL_OPEN_ANGLE=90` (or `120`) in
+`/etc/default/interceptorctl` and restart the service.
+
+The daemon applies the selected angle after startup in a background worker, so
+the local socket is not delayed when the MCU is still booting. It periodically
+verifies the value and reapplies it after an MCU reset or serial reconnect.
+Firmware older than `0x003D` remains usable: the daemon logs that this setting
+is unsupported and continues serving all older commands.
 
 The daemon creates:
 
@@ -119,6 +137,21 @@ state machine. `power status` returns the latest MCU cache including
 temperature; `power set/on/off` show the requested target rather than cached
 measurements.
 
+## Factory Web UI
+
+The production/debug web interface is tracked in `factory_web/`. It exposes the
+same JSON CLI operations, shows live system/emergency-stop/switch status, and
+provides the physical-button 90/120-degree selector while keeping the raw JSON
+command log visible.
+
+```bash
+cd /home/orangepi/interceptorctl/factory_web
+python3 -m uvicorn app:app --host 0.0.0.0 --port 8080 --no-proxy-headers
+```
+
+See `factory_web/README.md` for validation and the optional systemd template.
+The web service is not installed or enabled by the interceptorctl installer.
+
 ## Firmware Flash
 
 On the RK3588 board, MCU firmware is stored under:
@@ -127,18 +160,21 @@ On the RK3588 board, MCU firmware is stored under:
 /home/orangepi/interceptorctl/tools/
 ```
 
-The verified flash flow on `jjj` is:
+Current artifact: `sbdock_0x003D_button_open_angle_config.bin` (`74620` bytes,
+SHA256 `8c52ad45631d01f577ae64fccb3a47bfecbf35035799cb68e951f6bca1378449`).
+
+Flash command:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003B_button_90deg_open.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003D_button_open_angle_config.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003B_button_90deg_open.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003D_button_open_angle_config.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs
@@ -178,7 +214,23 @@ to change the wait timeout.
 ./interceptorctl door close
 ./interceptorctl door open --wait
 ./interceptorctl door close --wait --timeout 20
+./interceptorctl door angle              # query physical-button angle
+./interceptorctl door angle 90           # set and persist 90 degrees
+./interceptorctl door angle 120          # set and persist 120 degrees
 ```
+
+The angle setting changes only a physical cover-button open action. API
+`door open` and emergency-stop release retain the complete 120-degree target.
+The JSON socket equivalents are:
+
+```json
+{"cmd":"manual_open_angle_get","args":{}}
+{"cmd":"manual_open_angle_set","args":{"angle":120}}
+```
+
+Responses include `button_open_angle_deg`, `configured_angle_deg`,
+`applied_angle_deg`, `applied`, `supported`, `firmware_version`, `status`, and
+`persisted`. The setting command is accepted only for 90 or 120 degrees.
 
 ### Low-Level Motor Debug
 

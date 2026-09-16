@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0a1018">
+    <meta name="description" content="interceptorctl 图形化生产调试菜单">
+    <title>截击机图形化调试台</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">ITC</span>
+        <div>
+          <p>INTERCEPTOR CONTROL</p>
+          <h1>截击机图形化调试台</h1>
+        </div>
+      </div>
+      <div class="topbar-status">
+        <span id="socket-indicator" class="status-dot idle"></span>
+        <div>
+          <small>当前设备</small>
+          <strong id="hostname">连接中…</strong>
+        </div>
+      </div>
+    </header>
+
+    <div class="console-layout">
+      <aside class="sidebar" aria-label="功能导航">
+        <nav id="navigation">
+          <button class="nav-item active" data-panel="overview" type="button"><span>01</span>组件总览</button>
+          <button class="nav-item" data-panel="system" type="button"><span>02</span>系统与急停</button>
+          <button class="nav-item" data-panel="door" type="button"><span>03</span>舱门控制</button>
+          <button class="nav-item" data-panel="motor" type="button"><span>04</span>低层电机</button>
+          <button class="nav-item" data-panel="power" type="button"><span>05</span>直流电源</button>
+          <button class="nav-item" data-panel="led" type="button"><span>06</span>LED</button>
+          <button class="nav-item" data-panel="ac" type="button"><span>07</span>空调</button>
+          <button class="nav-item" data-panel="aircraft" type="button"><span>08</span>航空器 RS485</button>
+        </nav>
+        <div class="sidebar-meta">
+          <span>CLI</span>
+          <code id="cli-path">—</code>
+          <span>SOCKET</span>
+          <code id="socket-path">—</code>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section id="panel-overview" class="workspace-panel active">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">COMPONENT STATUS</p>
+              <h2>机场组件状态</h2>
+              <p>各卡片显示对应 `interceptorctl` JSON 结果，可单独或批量刷新。</p>
+            </div>
+            <div class="heading-actions">
+              <label class="compact-field">自动刷新
+                <select id="auto-refresh">
+                  <option value="0">关闭</option>
+                  <option value="15">15 秒</option>
+                  <option value="30">30 秒</option>
+                  <option value="60">60 秒</option>
+                </select>
+              </label>
+              <button id="refresh-all" class="button primary" type="button">刷新全部组件</button>
+            </div>
+          </div>
+
+          <div class="summary-strip">
+            <div><span>正常组件</span><strong id="healthy-count">—</strong></div>
+            <div><span>最后刷新</span><strong id="last-refresh">—</strong></div>
+            <div><span>当前任务</span><strong id="task-state">空闲</strong></div>
+          </div>
+          <div id="status-grid" class="status-grid" aria-live="polite"></div>
+        </section>
+
+        <section id="panel-system" class="workspace-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">SYSTEM / E-STOP</p><h2>系统、整机状态与急停</h2></div>
+            <button id="refresh-system" class="button secondary" type="button">刷新本页状态</button>
+          </div>
+          <div id="system-status-grid" class="status-grid system-status-grid" aria-live="polite"></div>
+          <article class="command-card wide">
+            <h3>状态读取</h3>
+            <p>对应数字菜单中的系统、UPS、环境温湿度和开关量读取。</p>
+            <div class="button-grid">
+              <button class="button secondary fixed-command" data-cli="version" data-label="读取 STM32 固件版本" data-status="version" type="button">STM32 固件版本</button>
+              <button class="button secondary fixed-command" data-cli="status" data-label="读取整机状态" data-status="system" type="button">整机状态</button>
+              <button class="button secondary fixed-command" data-cli="estop" data-label="读取急停状态" data-status="estop" type="button">急停状态</button>
+              <button class="button secondary fixed-command" data-cli="ups status" data-label="读取 UPS 状态" data-status="ups" type="button">UPS 状态</button>
+              <button class="button secondary fixed-command" data-cli="env status" data-label="读取环境温湿度" data-status="environment" type="button">环境温湿度</button>
+              <button class="button secondary fixed-command" data-cli="switch status" data-label="读取开关量状态" data-status="switch" type="button">开关量状态</button>
+            </div>
+          </article>
+          <article class="command-card danger-zone">
+            <h3>软件急停</h3>
+            <p>直接对应菜单的 stop 与 release-stop，点击后立即执行。</p>
+            <div class="button-row">
+              <button class="button danger fixed-command" data-cli="stop" data-label="设置软件电机急停" data-refresh-after="estop,motor,system" type="button">设置软件急停</button>
+              <button class="button warning fixed-command" data-cli="release-stop" data-label="解除软件急停并复位电机状态机" data-refresh-after="estop,motor,system" type="button">解除软件急停</button>
+            </div>
+          </article>
+        </section>
+
+        <section id="panel-door" class="workspace-panel">
+          <div class="panel-heading"><div><p class="eyebrow">DOOR</p><h2>舱门控制</h2></div></div>
+          <article class="command-card">
+            <div class="angle-card-heading">
+              <div>
+                <h3>实体按钮开盖角度</h3>
+                <p>仅改变盖按钮触发的下一次开盖；RK 主动开盖和急停解除仍为完整 120°。</p>
+              </div>
+              <strong id="button-angle-current" class="angle-value">读取中…</strong>
+            </div>
+            <form id="button-angle-form" class="form-grid two-col">
+              <label>角度档位
+                <select name="angle"><option value="90">90°</option><option value="120">120°</option></select>
+              </label>
+              <button class="button primary" type="submit">保存并下发</button>
+            </form>
+          </article>
+          <article class="command-card">
+            <h3>开门 / 关门</h3>
+            <form id="door-form" class="form-grid">
+              <label>动作
+                <select name="action"><option value="open">开门</option><option value="close">关门</option></select>
+              </label>
+              <label class="check-field"><input name="wait" type="checkbox"> 等待运动完成</label>
+              <label class="wait-field dimmed">等待超时（秒）<input name="timeout" type="number" value="20" min="0.1" step="0.1" disabled></label>
+              <button class="button primary" type="submit">执行舱门动作</button>
+            </form>
+          </article>
+        </section>
+
+        <section id="panel-motor" class="workspace-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">LOW-LEVEL MOTOR</p><h2>低层电机调试</h2></div>
+            <button class="button secondary fixed-command" data-cli="motor status" data-label="读取电机状态" data-status="motor" type="button">读取电机状态</button>
+          </div>
+          <article class="command-card wide">
+            <p>当前固件中 door、motor、motor1 均指向联动单轴。</p>
+            <form id="motor-form" class="form-grid">
+              <label>电机名称
+                <select name="target"><option value="door">door</option><option value="motor">motor</option><option value="motor1">motor1</option></select>
+              </label>
+              <label>动作
+                <select id="motor-action" name="action">
+                  <option value="enable">使能电机</option><option value="disable">禁用电机</option>
+                  <option value="home">回零 / 校准</option><option value="home-stop">停止回零 / 校准</option>
+                  <option value="trap">绝对位置梯形运动</option>
+                </select>
+              </label>
+              <label class="motor-trap hidden">绝对目标位置（0.1 度）<input name="position" type="number" value="0" step="1"></label>
+              <label class="motor-trap hidden">最大速度（0.1 RPM）<input name="speed" type="number" value="100" min="0" step="1"></label>
+              <label class="motor-trap hidden">加减速度（RPM/s）<input name="accel" type="number" value="10" min="0" step="1"></label>
+              <label class="check-field motor-wait hidden"><input name="wait" type="checkbox"> 等待动作完成</label>
+              <label class="motor-timeout hidden dimmed">等待超时（秒）<input name="timeout" type="number" value="20" min="0.1" step="0.1" disabled></label>
+              <button class="button primary" type="submit">执行电机命令</button>
+            </form>
+          </article>
+        </section>
+
+        <section id="panel-power" class="workspace-panel">
+          <div class="panel-heading"><div><p class="eyebrow">GPPOWER3000</p><h2>直流电源</h2></div></div>
+          <div class="command-grid">
+            <article class="command-card wide">
+              <h3>快捷命令</h3>
+              <div class="button-grid">
+                <button class="button secondary fixed-command" data-cli="power status" data-label="读取电源状态" data-status="power" type="button">读取状态</button>
+                <button class="button secondary fixed-command" data-cli="power fault" data-label="读取电源详细故障" type="button">详细故障</button>
+                <button class="button secondary fixed-command" data-cli="power temp" data-label="读取电源温度" type="button">读取温度</button>
+                <button class="button primary fixed-command" data-cli="power on" data-label="开启电源输出" data-refresh-after="power,system" type="button">开启输出</button>
+                <button class="button danger fixed-command" data-cli="power off" data-label="关闭电源输出" data-refresh-after="power,system" type="button">关闭输出</button>
+              </div>
+            </article>
+            <article class="command-card">
+              <h3>设置输出参数</h3>
+              <form id="power-set-form" class="form-grid two-col">
+                <label>电压（V）<input name="voltage" type="number" value="24.00" min="0" step="0.01" required></label>
+                <label>电流（A）<input name="current" type="number" value="1.00" min="0" step="0.01" required></label>
+                <button class="button primary" type="submit">写入电压 / 电流</button>
+              </form>
+            </article>
+            <article class="command-card">
+              <h3>原始 Modbus 字节</h3>
+              <form id="power-raw-form" class="form-grid two-col">
+                <label class="span-two">十六进制（自行包含 CRC）<input name="hex" type="text" placeholder="01 03 00 00 00 02 C4 0B" required></label>
+                <label>响应超时（ms）<input name="timeout" type="number" value="1000" min="0" step="1"></label>
+                <label>空闲结束（ms）<input name="idle" type="number" value="20" min="0" step="1"></label>
+                <button class="button secondary" type="submit">发送原始字节</button>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section id="panel-led" class="workspace-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">LED EXPANDER</p><h2>LED 扩展器</h2></div>
+            <button class="button secondary fixed-command" data-cli="led status" data-label="读取 LED 状态" data-status="led" type="button">读取 LED 状态</button>
+          </div>
+          <div class="command-grid">
+            <article class="command-card">
+              <h3>按灯组设置颜色</h3>
+              <form id="led-group-form" class="form-grid two-col">
+                <label>灯组<select name="group"><option value="jc">JC</option><option value="cd">CD</option><option value="wz">WZ</option><option value="dp">DP</option><option value="all">全部</option></select></label>
+                <label>颜色<select name="color"><option value="off">关闭</option><option value="red">红</option><option value="green">绿</option><option value="both">红绿同时</option><option value="yellow">黄（等同红绿同时）</option></select></label>
+                <button class="button primary" type="submit">设置颜色</button>
+              </form>
+            </article>
+            <article class="command-card">
+              <h3>原始 8 位掩码</h3>
+              <form id="led-mask-form" class="form-grid">
+                <label>掩码（0..255 或 0x00..0xFF）<input name="mask" type="text" value="0x00" required></label>
+                <button class="button secondary" type="submit">写入掩码</button>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section id="panel-ac" class="workspace-panel">
+          <div class="panel-heading">
+            <div><p class="eyebrow">HCNC4A</p><h2>空调</h2></div>
+            <div class="button-row">
+              <button class="button secondary fixed-command" data-cli="ac status" data-label="读取空调状态" data-status="ac" type="button">读取状态</button>
+              <button class="button secondary fixed-command" data-cli="ac settings" data-label="读取空调设置" type="button">读取设置</button>
+            </div>
+          </div>
+          <div class="command-grid">
+            <article class="command-card">
+              <h3>开关控制</h3>
+              <form id="ac-switch-form" class="form-grid two-col ac-form">
+                <label>功能<select name="action"><option value="power">远程开关机</option><option value="cool">强制制冷</option><option value="heat">强制制热</option></select></label>
+                <label>状态<select name="state"><option value="on">开启</option><option value="off">关闭</option></select></label>
+                <label class="check-field span-two"><input name="no_wait" type="checkbox"> 只等待 MCU 接收，不等待空调回复</label>
+                <label class="ac-timeout span-two">等待超时（秒）<input name="timeout" type="number" value="3" min="0.1" step="0.1"></label>
+                <button class="button primary" type="submit">执行空调开关</button>
+              </form>
+            </article>
+            <article class="command-card">
+              <h3>运行模式</h3>
+              <form id="ac-mode-form" class="form-grid ac-form">
+                <label>模式<select name="mode"><option value="normal">普通</option><option value="silent">静音</option></select></label>
+                <label class="check-field"><input name="no_wait" type="checkbox"> 不等待空调回复</label>
+                <label class="ac-timeout">等待超时（秒）<input name="timeout" type="number" value="3" min="0.1" step="0.1"></label>
+                <button class="button primary" type="submit">设置运行模式</button>
+              </form>
+            </article>
+            <article class="command-card wide">
+              <h3>空调参数</h3>
+              <form id="ac-value-form" class="form-grid two-col ac-form">
+                <label>参数
+                  <select id="ac-value-action" name="action">
+                    <option value="cool-temp">制冷启动温度（20.0..50.0 C）</option>
+                    <option value="cool-diff">制冷回差（1.0..10.0 C）</option>
+                    <option value="heat-temp">制热启动温度（-40.0..25.0 C）</option>
+                    <option value="heat-diff">制热回差（5.0..15.0 C）</option>
+                    <option value="dehumid">除湿目标（10..90%）</option>
+                    <option value="humidity">监控湿度（0..100%）</option>
+                  </select>
+                </label>
+                <label>设置值<input id="ac-value" name="value" type="number" value="30" min="20" max="50" step="0.1" required></label>
+                <label class="check-field"><input name="no_wait" type="checkbox"> 不等待空调回复</label>
+                <label class="ac-timeout">等待超时（秒）<input name="timeout" type="number" value="3" min="0.1" step="0.1"></label>
+                <button class="button primary" type="submit">写入空调参数</button>
+              </form>
+            </article>
+          </div>
+        </section>
+
+        <section id="panel-aircraft" class="workspace-panel">
+          <div class="panel-heading"><div><p class="eyebrow">UART4 / RS485</p><h2>航空器通讯</h2></div></div>
+          <div class="command-grid">
+            <article class="command-card">
+              <h3>被动读取</h3>
+              <form id="aircraft-read-form" class="form-grid two-col">
+                <label>等待超时（ms）<input name="timeout" type="number" value="1000" min="0" step="1"></label>
+                <label>最大读取长度<input name="max_len" type="number" value="220" min="1" step="1"></label>
+                <button class="button primary" type="submit">读取 UART4 数据</button>
+              </form>
+            </article>
+            <article class="command-card wide">
+              <h3>发送并接收</h3>
+              <form id="aircraft-xfer-form" class="form-grid two-col">
+                <label>发送格式<select id="aircraft-mode" name="mode"><option value="text">UTF-8 文本</option><option value="hex">十六进制字节</option></select></label>
+                <label class="span-two">发送内容<input id="aircraft-payload" name="payload" type="text" placeholder="输入 UTF-8 文本"></label>
+                <div id="aircraft-ending" class="check-row span-two">
+                  <label class="check-field"><input name="append_cr" type="checkbox"> 追加 CR（0x0D）</label>
+                  <label class="check-field"><input name="append_lf" type="checkbox"> 追加 LF（0x0A）</label>
+                </div>
+                <label>响应总超时（ms）<input name="timeout" type="number" value="1000" min="0" step="1"></label>
+                <label>响应空闲结束（ms）<input name="idle" type="number" value="30" min="0" step="1"></label>
+                <button class="button primary" type="submit">发送并接收</button>
+              </form>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <aside class="log-panel" aria-label="命令返回日志">
+        <div class="log-heading">
+          <div><p class="eyebrow">RAW JSON OUTPUT</p><h2>命令日志</h2></div>
+          <div class="button-row">
+            <button id="copy-log" class="icon-button" type="button" title="复制全部日志">复制</button>
+            <button id="clear-log" class="icon-button" type="button" title="清空日志">清空</button>
+          </div>
+        </div>
+        <div id="command-log" class="command-log" aria-live="polite">
+          <div id="log-empty" class="log-empty">命令执行后，CLI 原始 JSON 会显示在这里。</div>
+        </div>
+      </aside>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </body>
+</html>

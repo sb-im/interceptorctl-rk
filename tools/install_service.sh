@@ -5,6 +5,8 @@ APP_DIR="${APP_DIR:-/home/orangepi/interceptorctl}"
 SERVICE_NAME="interceptorctl.service"
 SERVICE_SRC="${APP_DIR}/systemd/${SERVICE_NAME}"
 SERVICE_DST="/etc/systemd/system/${SERVICE_NAME}"
+DEFAULTS_SRC="${APP_DIR}/systemd/interceptorctl.default"
+DEFAULTS_DST="/etc/default/interceptorctl"
 OLD_SERVICES=(sbmcu.service sbdockctl3.service sbdockctl300.service)
 
 if [[ "$(id -u)" -ne 0 ]]; then
@@ -18,7 +20,17 @@ if [[ ! -f "${SERVICE_SRC}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${DEFAULTS_SRC}" ]]; then
+  echo "defaults file not found: ${DEFAULTS_SRC}" >&2
+  exit 1
+fi
+
 install -m 0644 "${SERVICE_SRC}" "${SERVICE_DST}"
+if [[ ! -e "${DEFAULTS_DST}" ]]; then
+  install -m 0644 "${DEFAULTS_SRC}" "${DEFAULTS_DST}"
+else
+  echo "Preserving existing ${DEFAULTS_DST}"
+fi
 
 systemctl daemon-reload
 
