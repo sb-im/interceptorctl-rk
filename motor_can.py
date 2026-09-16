@@ -37,6 +37,7 @@ CAN_FRAME_STRUCT = struct.Struct("=IB3x8s")
 FRAME_END = 0x6B
 SCAN_MOTOR_ID_MIN = 1
 SCAN_MOTOR_ID_MAX = 32
+SCAN_PROBE_INTERVAL_S = 0.002
 CMD_READ_VERSION = 0x1F
 CMD_READ_HOME_PARAMS = 0x22
 CMD_READ_STATUS = 0x3A
@@ -227,6 +228,7 @@ class MotorCanConfigurator:
         quiet_window_timeout_s: float = 2.0,
         socket_factory: Optional[Callable[..., Any]] = None,
         monotonic: Callable[[], float] = time.monotonic,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         if not iface:
             raise ValueError("SocketCAN interface name must not be empty")
@@ -240,6 +242,7 @@ class MotorCanConfigurator:
         self.quiet_window_timeout_s = float(quiet_window_timeout_s)
         self._socket_factory = socket_factory
         self._monotonic = monotonic
+        self._sleeper = sleeper
         self._lock = threading.Lock()
 
     def scan(self) -> Dict[str, Any]:
@@ -592,6 +595,11 @@ class MotorCanConfigurator:
         query = bytes((CMD_READ_VERSION, FRAME_END))
         for motor_id in range(SCAN_MOTOR_ID_MIN, SCAN_MOTOR_ID_MAX + 1):
             self._send_frame(sock, frames, motor_id << 8, query)
+            if motor_id != SCAN_MOTOR_ID_MAX:
+                # RK's can0 qdisc is intentionally small (typically 10
+                # frames).  Pacing keeps the directed sweep from overflowing
+                # it while remaining far faster than the response window.
+                self._sleeper(SCAN_PROBE_INTERVAL_S)
 
         deadline = self._monotonic() + self.scan_window_s
         found: Dict[int, Dict[str, Any]] = {}

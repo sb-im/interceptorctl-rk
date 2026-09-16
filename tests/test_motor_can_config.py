@@ -11,6 +11,7 @@ from motor_can import (
     MotorCanConfigurator,
     SCAN_MOTOR_ID_MAX,
     SCAN_MOTOR_ID_MIN,
+    SCAN_PROBE_INTERVAL_S,
     _split_command_payload,
 )
 
@@ -100,6 +101,7 @@ def configurator(fake: FakeSocket) -> MotorCanConfigurator:
         scan_window_s=0.1,
         quiet_window_timeout_s=0.1,
         socket_factory=lambda *_args: fake,
+        sleeper=lambda _seconds: None,
     )
 
 
@@ -176,6 +178,27 @@ class MotorCanPacketTest(unittest.TestCase):
         self.assertEqual(result["motor_ids"], [2])
         self.assertEqual(unpack_sent(fake), expected_scan_queries())
         self.assertFalse(any(ext_id == 0 for ext_id, _ in unpack_sent(fake)))
+
+    def test_scan_paces_queries_to_fit_small_socketcan_queue(self) -> None:
+        fake = FakeSocket([VERSION_ID_2, TIMEOUT])
+        delays: list[float] = []
+        scanner = MotorCanConfigurator(
+            "can0",
+            test_logger(),
+            timeout_s=0.1,
+            scan_window_s=0.1,
+            quiet_window_timeout_s=0.1,
+            socket_factory=lambda *_args: fake,
+            sleeper=delays.append,
+        )
+
+        result = scanner.scan()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            delays,
+            [SCAN_PROBE_INTERVAL_S] * (SCAN_MOTOR_ID_MAX - SCAN_MOTOR_ID_MIN),
+        )
 
     def test_scan_ignores_response_outside_ids_one_through_32(self) -> None:
         fake = FakeSocket(
