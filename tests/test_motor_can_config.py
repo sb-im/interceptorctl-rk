@@ -9,6 +9,9 @@ from motor_can import (
     CAN_FRAME_STRUCT,
     DEFAULT_HOMING_CONFIG,
     MotorCanConfigurator,
+    POST_ID_CHANGE_RETRY_INTERVAL_S,
+    POST_ID_CHANGE_SCAN_ATTEMPTS,
+    POST_ID_CHANGE_SETTLE_S,
     SCAN_MOTOR_ID_MAX,
     SCAN_MOTOR_ID_MIN,
     SCAN_PROBE_INTERVAL_S,
@@ -415,6 +418,7 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertTrue(result["id_change"]["verified"])
         self.assertEqual(result["id_change_ack"]["response_motor_id"], 7)
         self.assertEqual(result["post_change_motor_ids"], [1])
+        self.assertEqual(result["id_change"]["verification_attempts"], 1)
 
         sent = unpack_sent(fake)
         self.assertEqual(
@@ -431,6 +435,80 @@ class MotorCanApplyTest(unittest.TestCase):
                 (0x0100, bytes.fromhex("22 6B")),
             ],
         )
+
+    def test_apply_retries_scan_while_stored_id_change_settles(self) -> None:
+        fake = FakeSocket(
+            [
+                VERSION_ID_7,
+                TIMEOUT,
+                STATUS_DISABLED_7,
+                TIMEOUT,
+                CHANGE_ID_ACK_OLD_7,
+                TIMEOUT,
+                VERSION_ID_1,
+                TIMEOUT,
+                STATUS_DISABLED,
+                TIMEOUT,
+                *response_packets(1, CURRENT_LOGICAL),
+                WRITE_ACK,
+                STATUS_DISABLED,
+                TIMEOUT,
+                *response_packets(1, DESIRED_LOGICAL),
+            ]
+        )
+
+        result = configurator(fake).apply_default_homing_config()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["motor_id"], 1)
+        self.assertEqual(result["post_change_motor_ids"], [1])
+        self.assertEqual(result["id_change"]["verification_attempts"], 2)
+        self.assertEqual(
+            unpack_sent(fake).count((0x0100, bytes.fromhex("1F 6B"))),
+            3,
+        )
+
+    def test_post_change_retry_uses_settle_and_retry_delays(self) -> None:
+        fake = FakeSocket(
+            [
+                VERSION_ID_7,
+                TIMEOUT,
+                STATUS_DISABLED_7,
+                TIMEOUT,
+                CHANGE_ID_ACK_OLD_7,
+                TIMEOUT,
+                VERSION_ID_1,
+                TIMEOUT,
+                STATUS_DISABLED,
+                TIMEOUT,
+                *response_packets(1, CURRENT_LOGICAL),
+                WRITE_ACK,
+                STATUS_DISABLED,
+                TIMEOUT,
+                *response_packets(1, DESIRED_LOGICAL),
+            ]
+        )
+        delays: list[float] = []
+        client = MotorCanConfigurator(
+            "can0",
+            test_logger(),
+            timeout_s=0.1,
+            scan_window_s=0.1,
+            quiet_window_timeout_s=0.1,
+            socket_factory=lambda *_args: fake,
+            sleeper=delays.append,
+        )
+
+        result = client.apply_default_homing_config()
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(delays.count(POST_ID_CHANGE_SETTLE_S), 1)
+        self.assertEqual(delays.count(POST_ID_CHANGE_RETRY_INTERVAL_S), 1)
+        self.assertEqual(
+            delays.count(SCAN_PROBE_INTERVAL_S),
+            (SCAN_MOTOR_ID_MAX - SCAN_MOTOR_ID_MIN) * 3,
+        )
+        self.assertEqual(POST_ID_CHANGE_SCAN_ATTEMPTS, 3)
 
     def test_apply_fails_closed_when_id_change_ack_was_lost(self) -> None:
         fake = FakeSocket(

@@ -38,6 +38,9 @@ FRAME_END = 0x6B
 SCAN_MOTOR_ID_MIN = 1
 SCAN_MOTOR_ID_MAX = 32
 SCAN_PROBE_INTERVAL_S = 0.002
+POST_ID_CHANGE_SETTLE_S = 0.5
+POST_ID_CHANGE_SCAN_ATTEMPTS = 3
+POST_ID_CHANGE_RETRY_INTERVAL_S = 0.25
 CMD_READ_VERSION = 0x1F
 CMD_READ_HOME_PARAMS = 0x22
 CMD_READ_STATUS = 0x3A
@@ -719,9 +722,17 @@ class MotorCanConfigurator:
             # transaction closed.  A fresh invocation can safely continue
             # from whichever unique ID is then discovered.
             change["ack_timeout"] = True
-            motors = self._scan_on_socket(sock, frames)
+            motors, verification_attempts = self._scan_after_id_change(
+                sock,
+                frames,
+                new_motor_id,
+            )
             motor_ids = [item["motor_id"] for item in motors]
-            change.update(motor_ids=motor_ids, motors=motors)
+            change.update(
+                motor_ids=motor_ids,
+                motors=motors,
+                verification_attempts=verification_attempts,
+            )
             raise MotorCanError(
                 "change_id_ack_timeout",
                 "0xAE acknowledgement was not received; live IDs were re-scanned and 0x4C was not sent",
@@ -739,10 +750,20 @@ class MotorCanConfigurator:
                 ack=ack,
             )
 
-        # Prove that the unique live address changed before any 0x4C frame.
-        motors = self._scan_on_socket(sock, frames)
+        # A stored ID change can briefly restart the motor's CAN handling after
+        # it has acknowledged 0xAE.  Give it time to settle and retry the full
+        # addressed 1..32 sweep before declaring verification failure.
+        motors, verification_attempts = self._scan_after_id_change(
+            sock,
+            frames,
+            new_motor_id,
+        )
         motor_ids = [item["motor_id"] for item in motors]
-        change.update(motor_ids=motor_ids, motors=motors)
+        change.update(
+            motor_ids=motor_ids,
+            motors=motors,
+            verification_attempts=verification_attempts,
+        )
         if motor_ids != [new_motor_id]:
             raise MotorCanError(
                 "change_id_verification_failed",
@@ -754,6 +775,26 @@ class MotorCanConfigurator:
 
         change["verified"] = True
         return change
+
+    def _scan_after_id_change(
+        self,
+        sock: Any,
+        frames: List[Dict[str, Any]],
+        expected_motor_id: int,
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """Retry addressed discovery while a stored CAN-ID change settles."""
+
+        self._sleeper(POST_ID_CHANGE_SETTLE_S)
+        last_observed: List[Dict[str, Any]] = []
+        for attempt in range(1, POST_ID_CHANGE_SCAN_ATTEMPTS + 1):
+            motors = self._scan_on_socket(sock, frames)
+            if motors:
+                last_observed = motors
+            if [item["motor_id"] for item in motors] == [expected_motor_id]:
+                return motors, attempt
+            if attempt != POST_ID_CHANGE_SCAN_ATTEMPTS:
+                self._sleeper(POST_ID_CHANGE_RETRY_INTERVAL_S)
+        return last_observed, POST_ID_CHANGE_SCAN_ATTEMPTS
 
     def _read_status_on_socket(
         self,
