@@ -216,6 +216,7 @@ class MotorCanApplyTest(unittest.TestCase):
                 STATUS_DISABLED,
                 *response_packets(1, CURRENT_LOGICAL),
                 WRITE_ACK,
+                STATUS_DISABLED,
                 *response_packets(1, DESIRED_LOGICAL),
             ]
         )
@@ -227,6 +228,7 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertFalse(result["store_persistence_verifiable"])
         self.assertEqual(result["ack"]["result"], ACK_OK)
         self.assertFalse(result["driver_enabled"])
+        self.assertTrue(result["readback_poll_boundary"]["observed"])
         self.assertEqual(result["after"], result["desired"])
 
         sent = unpack_sent(fake)
@@ -260,6 +262,8 @@ class MotorCanApplyTest(unittest.TestCase):
                 TIMEOUT,
                 *response_packets(1, CURRENT_LOGICAL),
                 WRITE_ACK,
+                TIMEOUT,
+                TIMEOUT,
                 *response_packets(1, DESIRED_LOGICAL),
             ]
         )
@@ -277,6 +281,7 @@ class MotorCanApplyTest(unittest.TestCase):
                 STATUS_DISABLED,
                 *response_packets(1, CURRENT_LOGICAL),
                 WRITE_ACK,
+                STATUS_DISABLED,
                 *response_packets(1, CURRENT_LOGICAL),
             ]
         )

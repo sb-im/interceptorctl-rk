@@ -371,6 +371,24 @@ class MotorCanConfigurator:
                         ack=ack,
                     )
 
+                # The driver may acknowledge 0x4C before its flash/update
+                # work has fully settled.  Also, the MCU's next periodic poll
+                # can arrive before a three-packet 0x22 reply completes.  Wait
+                # for that poll to finish and start verification in the next
+                # quiet window instead of reading back immediately after ACK.
+                readback_boundary = self._wait_for_mcu_poll_boundary(
+                    sock, frames, resolved_id
+                )
+                result["readback_poll_boundary"] = readback_boundary
+                if readback_boundary["driver_enabled"] is True:
+                    raise MotorCanError(
+                        "driver_enabled_during_readback",
+                        "motor driver became enabled after configuration; 0x22 verification was not sent",
+                        motor_id=resolved_id,
+                        motor_status_raw=readback_boundary["motor_status_raw"],
+                        driver_enabled=True,
+                    )
+
                 after = self._read_homing_on_socket(sock, frames, resolved_id)
                 result["after"] = after.to_dict()
                 if after != desired:
