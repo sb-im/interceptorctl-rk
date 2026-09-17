@@ -19,16 +19,18 @@ The current STM32 interceptor firmware runs USART1 in silent request-response
 mode: debug, error, status, and motor-position push packets are suppressed.
 Only command ACK/data responses are expected during normal operation.
 
-Current released STM32 firmware version: `0x003E`.
+Current released STM32 firmware version: `0x003F`.
 Current RK3588 `interceptorctl` release branch: `main`.
 
-Firmware `0x003E` keeps the field-verified fan and runtime 90/120-degree
-physical cover-button setting, and adds dedicated MCU command 23 for reading
-back the effective angle.
+Firmware `0x003F` keeps the field-verified fan, runtime 90/120-degree setting,
+and dedicated MCU command 23 readback. RK/API `door open`, emergency-stop
+release auto-open, and the physical cover button now share one configured target.
 
 Firmware selection:
 
-- `0x003E`: default release; adds dedicated physical-button angle readback and
+- `0x003F`: default release; unifies RK/API, emergency-stop release, and
+  physical-button open actions on the configured 90/120-degree target.
+- `0x003E`: previous release; adds dedicated physical-button angle readback and
   verifies every setting with a separate MCU read after command 22.
 - `0x003D`: previous release; adds the runtime physical-button open-angle setting
   and supports legacy readback through an empty command-22 request.
@@ -77,8 +79,8 @@ systemctl status interceptorctl.service
 ```
 
 `install_service.sh` creates `/etc/default/interceptorctl` only when it does not
-already exist, so upgrades preserve administrator overrides. The physical
-cover-button open angle defaults to 90 degrees. A setting made with
+already exist, so upgrades preserve administrator overrides. The unified open
+angle defaults to 90 degrees. A setting made with
 `interceptorctl door angle 90|120` is stored atomically in
 `/home/orangepi/.config/interceptorctl/settings.json` and is restored after a
 reboot. To force an administrator-managed value instead, uncomment
@@ -88,8 +90,8 @@ reboot. To force an administrator-managed value instead, uncomment
 The daemon applies the selected angle after startup in a background worker, so
 the local socket is not delayed when the MCU is still booting. It performs a
 separate MCU readback after every setting, periodically verifies the value, and
-reapplies it after an MCU reset or serial reconnect. Firmware `0x003E` uses
-dedicated command 23; `0x003D` remains compatible through command 22.
+reapplies it after an MCU reset or serial reconnect. Firmware `0x003E` and
+later use dedicated command 23; `0x003D` remains compatible through command 22.
 Firmware older than `0x003D` remains usable: the daemon logs that this setting
 is unsupported and continues serving all older commands.
 
@@ -146,7 +148,7 @@ measurements.
 
 The production/debug web interface is tracked in `factory_web/`. It exposes the
 same JSON CLI operations, shows live system/emergency-stop/switch status, and
-provides the physical-button 90/120-degree selector. The low-level motor page
+provides the unified 90/120-degree open-angle selector. The low-level motor page
 can also discover the single motor on `can0`, normalize a non-production CAN
 ID to ID 1, read its homing configuration, and apply the production homing
 configuration with readback verification. The raw JSON command log remains
@@ -168,21 +170,21 @@ On the RK3588 board, MCU firmware is stored under:
 /home/orangepi/interceptorctl/tools/
 ```
 
-Current artifact: `sbdock_0x003E_button_angle_readback.bin` (`74684` bytes,
-SHA256 `4eeecd32905a10edd38f8c00312d430de52b79d28e07607a936d1c4769f3e0e1`).
+Current artifact: `sbdock_0x003F_unified_open_angle.bin` (`74700` bytes,
+SHA256 `6c2dcaaeee4b99548970519a2296e1662d413686d59379f64bd83742be53c77f`).
 
 Flash command:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003E_button_angle_readback.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003F_unified_open_angle.bin
 ```
 
 Preview without flashing:
 
 ```bash
 sudo /usr/bin/python3 /home/orangepi/interceptorctl/tools/flash_mcu.py --dry-run \
-  /home/orangepi/interceptorctl/tools/sbdock_0x003E_button_angle_readback.bin
+  /home/orangepi/interceptorctl/tools/sbdock_0x003F_unified_open_angle.bin
 ```
 
 `flash_mcu.py` stops `interceptorctl.service`, drives BOOT0/RESET GPIO, runs
@@ -222,13 +224,13 @@ to change the wait timeout.
 ./interceptorctl door close
 ./interceptorctl door open --wait
 ./interceptorctl door close --wait --timeout 20
-./interceptorctl door angle              # query physical-button angle
+./interceptorctl door angle              # query the unified open angle
 ./interceptorctl door angle 90           # set and persist 90 degrees
 ./interceptorctl door angle 120          # set and persist 120 degrees
 ```
 
-The angle setting changes only a physical cover-button open action. API
-`door open` and emergency-stop release retain the complete 120-degree target.
+The angle setting controls RK/API `door open`, physical cover-button open
+actions, and the automatic open after emergency-stop release.
 The JSON socket equivalents are:
 
 ```json
@@ -238,8 +240,8 @@ The JSON socket equivalents are:
 
 Responses include `button_open_angle_deg`, `configured_angle_deg`,
 `applied_angle_deg`, `mcu_readback_command_id`, `applied`, `supported`,
-`firmware_version`, `status`, and `persisted`. On `0x003E`, a successful set is
-reported only after dedicated MCU command 23 reads back the requested value.
+`firmware_version`, `status`, and `persisted`. On `0x003E` and later, a
+successful set is reported only after dedicated MCU command 23 reads back the requested value.
 The setting command is accepted only for 90 or 120 degrees.
 
 ### Low-Level Motor Debug

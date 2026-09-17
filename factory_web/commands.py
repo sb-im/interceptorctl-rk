@@ -4,7 +4,7 @@ STATUS_COMMANDS = (
     ("version", "MCU 固件", ("version",)),
     ("system", "整机状态", ("status",)),
     ("estop", "急停状态", ("estop",)),
-    ("button_angle", "按钮开盖角度", ("door", "angle")),
+    ("button_angle", "统一开门角度", ("door", "angle")),
     ("motor", "电机状态", ("motor", "status")),
     ("power", "直流电源", ("power", "status")),
     ("ups", "UPS", ("ups", "status")),

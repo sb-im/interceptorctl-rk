@@ -2,7 +2,7 @@
 # The web/CLI-selected angle is stored separately in
 # /home/orangepi/.config/interceptorctl/settings.json.
 
-# Force the physical cover-button open angle at every daemon start.
+# Force the unified RK/API, button, and emergency-release open angle at every daemon start.
 # When this line is enabled it overrides the value saved by the web UI/CLI.
 # INTERCEPTOR_MANUAL_OPEN_ANGLE=90
 

@@ -178,7 +178,7 @@ def persist_manual_open_angle(settings_file: str, angle: int) -> None:
 
 
 class ManualOpenAngleController:
-    """Keep the MCU physical-button angle synchronized without owning the serial port."""
+    """Keep the MCU unified open angle synchronized without owning the serial port."""
 
     def __init__(
         self,
@@ -727,7 +727,7 @@ def main() -> int:
         type=int,
         choices=MANUAL_OPEN_ANGLES_DEG,
         default=None,
-        help="initial physical-button open angle; overrides environment and saved settings",
+        help="initial unified open angle; overrides environment and saved settings",
     )
     parser.add_argument(
         "--settings-file",

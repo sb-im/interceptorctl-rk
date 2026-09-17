@@ -13,8 +13,8 @@ class StaticUiTests(unittest.TestCase):
 
     def test_static_assets_use_cache_busting_versions(self):
         html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
-        self.assertIn('/static/styles.css?v=20260916-motor-scan-4', html)
-        self.assertIn('/static/app.js?v=20260916-motor-scan-4', html)
+        self.assertIn('/static/styles.css?v=20260917-estop-angle-1', html)
+        self.assertIn('/static/app.js?v=20260917-estop-angle-1', html)
 
     def test_button_angle_control_uses_cli_contract(self):
         html = (BASE_DIR / "static" / "index.html").read_text(encoding="utf-8")
@@ -24,6 +24,7 @@ class StaticUiTests(unittest.TestCase):
         self.assertIn("mcu_readback_command_id", javascript)
         self.assertIn('<option value="90">90°</option>', html)
         self.assertIn('<option value="120">120°</option>', html)
+        self.assertIn("RK/API 开门、实体按钮开门和急停释放后的自动开门统一使用此角度", html)
         self.assertIn('args: ["door", "angle", angle]', javascript)
         self.assertIn('data-status-id', javascript)
 

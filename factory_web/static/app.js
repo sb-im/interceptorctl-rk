@@ -772,7 +772,7 @@ function bindControls() {
     const angle = String(data.get("angle"));
     return {
       args: ["door", "angle", angle],
-      label: `实体按钮开盖角度 · ${angle}°`,
+      label: `统一开门角度 · ${angle}°`,
       renderId: "button_angle",
       refreshAfter: ["button_angle"],
     };

@@ -20,7 +20,7 @@
 - 客户程序、测试脚本、调度程序都通过 `/tmp/interceptorctl.sock` 发 JSON 请求。
 - 每个请求是一行 UTF-8 JSON，以 `\n` 结尾；每个回复也是一行 JSON。
 - socket 路径默认是 `/tmp/interceptorctl.sock`。
-- 当前正式 MCU 固件版本是 `0x003E`，RK3588 `interceptorctl` 使用 `main` 正式分支。实体按钮开盖可配置为 90° 或 120°，设置后由独立命令 ID 23 从 MCU 回读确认；API `door open` 仍执行完整 120° 开盖。
+- 当前正式 MCU 固件版本是 `0x003F`，RK3588 `interceptorctl` 使用 `main` 正式分支。RK/API `door open`、实体按钮开门和急停释放自动开门统一使用可配置的 90°/120°目标，设置后由独立命令 ID 23 从 MCU 回读确认。
 
 启动 daemon：
 
@@ -47,7 +47,7 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 回复也是一行 JSON。客户默认 API 只保留业务字段，例如：
 
 ```json
-{"ok":true,"version":"0x003E"}
+{"ok":true,"version":"0x003F"}
 ```
 
 通用字段：
@@ -72,7 +72,7 @@ sudo systemctl disable --now sbmcu.service 2>/dev/null || true
 
 `switch_status` 用于读取 PSW1/PSW2/PSW3/PSW4 active-low 输入：PSW1/PD15=`module_reached_switch`，PSW2/PD14=`aircraft_position_switch`，PSW3/PD13=`cover_button`，PSW4/PD12=`aircraft_present_switch`。按钮触发手动关盖时，MCU 只在触发瞬间比较 PSW2 与 PSW4：两者都按下或都没按下时允许关盖，只有一个按下时阻止关盖。运动开始后不再检查这两个输入。PSW1 不参与关盖条件，但关闭方向回零时作为零点触发开关。电机驱动器需预先配置正确的回零方向与运动参数，MCU 回零期间不会读取或改写这些参数。回零前 MCU 会先对 PSW1 消抖并读取电机状态；实时堵转或堵转保护会直接终止回零且不会自动解堵，PSW1 已触发时不会启动电机，只执行去使能、清零和校验。
 
-实体按钮角度可通过 `manual_open_angle_get` 查询，通过 `manual_open_angle_set` 的 `{"angle":90}` 或 `{"angle":120}` 设置。`0x003E` 每次设置后使用独立 MCU 命令 ID 23 回读，只有回读值与目标相同才持久化并返回成功；返回字段 `mcu_readback_command_id` 可确认实际使用的回读命令。daemon 启动、串口重连或 MCU 独立复位后会自动重新核验和下发。此配置只影响实体按钮开盖；API 开盖和急停解除后的自动开盖保持完整 120°。
+统一开门角度可通过 `manual_open_angle_get` 查询，通过 `manual_open_angle_set` 的 `{"angle":90}` 或 `{"angle":120}` 设置。`0x003E` 及以上固件每次设置后使用独立 MCU 命令 ID 23 回读，只有回读值与目标相同才持久化并返回成功；返回字段 `mcu_readback_command_id` 可确认实际使用的回读命令。daemon 启动、串口重连或 MCU 独立复位后会自动重新核验和下发。`0x003F` 起，此配置同时影响 RK/API `door open`、实体按钮开门和急停解除后的自动开门。
 
 生产调试网页的电机回零参数功能由 daemon 直接使用 RK `can0` 完成。扫描不使用广播指令，而是依次向电机 ID 1～32 定向发送只读版本查询 `1F 6B`，只有识别到唯一电机才继续。若扫描到的 ID 不是 1，会先主动读取旧 ID 状态并确认未使能，再持久化修改为 ID 1，随后再次定向扫描 1～32，且必须唯一确认 ID 1。然后固定写入无感碰撞回零、CW、300 RPM、120000 ms、检测 80 RPM / 2000 mA / 400 ms、禁用上电自动回零，并请求掉电保存。写入后使用 `0x22` 回读逐字段验证。任一改址或复扫步骤失败都不会发送 `0x4C`。该流程不会使能电机、触发回零、清零或发送运动命令，配置期间不要按实体开盖按钮。
 

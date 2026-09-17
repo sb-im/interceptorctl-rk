@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#0a1018">
     <meta name="description" content="interceptorctl 图形化生产调试菜单">
     <title>截击机图形化调试台</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260916-motor-scan-4">
-    <script src="/static/app.js?v=20260916-motor-scan-4" defer></script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260917-estop-angle-1">
+    <script src="/static/app.js?v=20260917-estop-angle-1" defer></script>
   </head>
   <body>
     <header class="topbar">
@@ -109,8 +109,8 @@
           <article class="command-card">
             <div class="angle-card-heading">
               <div>
-                <h3>实体按钮开盖角度</h3>
-                <p>仅改变盖按钮触发的下一次开盖；RK 主动开盖和急停解除仍为完整 120°。</p>
+                <h3>统一开门角度</h3>
+                <p>RK/API 开门、实体按钮开门和急停释放后的自动开门统一使用此角度。</p>
               </div>
               <strong id="button-angle-current" class="angle-value">读取中…</strong>
             </div>
@@ -121,7 +121,7 @@
               <button class="button primary" type="submit">保存并下发</button>
             </form>
             <div class="button-row">
-              <button class="button secondary fixed-command" data-cli="door angle" data-label="从 MCU 独立回读实体按钮开盖角度" data-status="button_angle" type="button">从 MCU 回读当前角度</button>
+              <button class="button secondary fixed-command" data-cli="door angle" data-label="从 MCU 独立回读统一开门角度" data-status="button_angle" type="button">从 MCU 回读当前角度</button>
             </div>
           </article>
           <article class="command-card">

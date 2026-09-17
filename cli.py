@@ -707,7 +707,7 @@ units:
         p.add_argument("--no-wait", action="store_false", dest="wait", help=argparse.SUPPRESS)
         p.set_defaults(wait=False)
         p.add_argument("--timeout", type=float, default=20.0, help="seconds to wait for motion completion, default: 20")
-    angle = door_sub.add_parser("angle", help="read or set the physical cover-button open angle")
+    angle = door_sub.add_parser("angle", help="read or set the unified door-open angle")
     angle.add_argument("degrees", type=int, nargs="?", choices=(90, 120), help="90 or 120; omit to query")
 
     motor = sub.add_parser("motor", help="low-level motor debug commands")

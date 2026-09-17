@@ -6,7 +6,7 @@
 
 当前版本：
 
-- MCU 固件版本：`0x003E`（支持实体按钮 90°/120° 开盖角度配置及独立 MCU 回读）
+- MCU 固件版本：`0x003F`（RK/API、实体按钮与急停释放自动开门共用 90°/120°配置，并支持独立 MCU 回读）
 - RK3588 `interceptorctl` 分支：`main`
 - Unix socket：`/tmp/interceptorctl.sock`
 
@@ -171,7 +171,7 @@ ls -l /tmp/interceptorctl.sock
 | cmd | args | 说明 |
 | --- | --- | --- |
 | `version` | `{}` | 读取 MCU 固件版本。 |
-| `manual_open_angle_get` | `{}` | 读取实体开盖按钮的配置值、MCU 实际值和同步状态。 |
+| `manual_open_angle_get` | `{}` | 读取统一开门角度的配置值、MCU 实际值和同步状态。 |
 | `stop_status` | `{}` | 读取实体急停按钮状态。 |
 | `motor_status` | `{}` | 读取门和平台电机状态。 |
 | `power_status` | `{}` | 读取电源状态，返回值包含温度。 |
@@ -186,7 +186,7 @@ ls -l /tmp/interceptorctl.sock
 | --- | --- | --- |
 | `door_open` | `{"wait":false,"timeout":20}` | 单电机联动门打开。默认只等 MCU ack，不等机械动作完成。 |
 | `door_close` | `{"wait":false,"timeout":20}` | 单电机联动门关闭。运动中再次下发会更新梯形目标。 |
-| `manual_open_angle_set` | `{"angle":120}` | 将实体开盖按钮目标设置为 90° 或 120°，成功后持久化到 RK。 |
+| `manual_open_angle_set` | `{"angle":120}` | 将三种开门入口的统一目标设置为 90° 或 120°，成功后持久化到 RK。 |
 | `power_set` | `{"voltage":2400,"current":100}` | 设置电源目标值，单位 0.01V / 0.01A。 |
 | `power_on` | `{}` | 打开电源输出。 |
 | `power_off` | `{}` | 关闭电源输出。 |
@@ -231,7 +231,7 @@ ls -l /tmp/interceptorctl.sock
 回复：
 
 ```json
-{"ok":true,"version":"0x003E"}
+{"ok":true,"version":"0x003F"}
 ```
 
 字段说明：
@@ -337,17 +337,17 @@ ls -l /tmp/interceptorctl.sock
 - `wait`：是否由 daemon 等待动作结束。
 - `timeout`：最大等待时间，单位秒。
 
-实体开盖按钮角度配置：
+统一开门角度配置：
 
 ```json
 {"cmd":"manual_open_angle_get","args":{}}
 {"cmd":"manual_open_angle_set","args":{"angle":120}}
 ```
 
-`angle` 只允许 `90` 或 `120`。设置仅影响实体按钮触发的开盖动作；API
-`door_open` 和急停解除后的自动开盖仍使用完整 120° 目标。回复中的
+`angle` 只允许 `90` 或 `120`。`0x003F` 起，设置同时影响 RK/API `door_open`、
+实体按钮触发的开盖动作和急停解除后的自动开门。回复中的
 `button_open_angle_deg` 是所选配置，`applied_angle_deg` 是 MCU 当前回读值，
-`mcu_readback_command_id` 在 `0x003E` 上为独立回读命令 `23`。设置操作会先
+`mcu_readback_command_id` 在 `0x003E` 及以上固件上为独立回读命令 `23`。设置操作会先
 发送命令 22，再发送命令 23；只有独立回读值与目标一致才返回成功并持久化。
 `applied` 表示两者一致，`supported` 表示当前固件是否支持。设置成功后保存在
 `/home/orangepi/.config/interceptorctl/settings.json`，daemon 启动、串口重连或
