@@ -92,8 +92,9 @@ the local socket is not delayed when the MCU is still booting. It performs a
 separate MCU readback after every setting, periodically verifies the value, and
 reapplies it after an MCU reset or serial reconnect. Firmware `0x003E` and
 later use dedicated command 23; `0x003D` remains compatible through command 22.
-Firmware older than `0x003D` remains usable: the daemon logs that this setting
-is unsupported and continues serving all older commands.
+Unified RK/API `door open` requires firmware `0x003F` or later and fails closed
+without sending a motion command on older firmware. Unaffected legacy commands
+remain available.
 
 The daemon creates:
 
@@ -212,12 +213,12 @@ Global options:
 
 ### Door Business Actions
 
-These commands are RK-side wrappers around the low-level trapezoid command.
-The new linked mechanics use one motor only. The RK daemon fills the configured
-open/close target position plus independent max speed and acceleration, then sends
-`motor_trapezoid` to the MCU. By default the CLI returns after the MCU accepts
-the target. Add `--wait` to wait for motion completion, or `--timeout <seconds>`
-to change the wait timeout.
+The new linked mechanics use one motor only. `door open` first synchronizes the
+configured angle, then sends MCU door-open command 1; the MCU, physical button,
+and emergency-stop release therefore use the same 90°/120° target. `door close`
+continues to send a low-level trapezoid target at the calibrated zero position.
+By default the CLI returns after the MCU accepts the target. Add `--wait` to wait
+for motion completion, or `--timeout <seconds>` to change the wait timeout.
 
 ```bash
 ./interceptorctl door open
@@ -275,8 +276,9 @@ and verifies position zero. Otherwise it starts homing, waits for PSW1, stops
 homing, allows the driver to settle, clears and verifies position zero, and
 finally disables the motor. A successful asynchronous event uses
 `reason=homing_switch_zeroed`. `home-stop` cancels this sequence.
-After successful homing, the configured close coordinate is `0` and the open
-coordinate is `-427000`, both in motor-side `0.1 degree` units. `trap` means
+After successful homing, the configured close coordinate is `0`. The unified
+open coordinate is `-345000` at 90 degrees or `-427000` at 120 degrees, in
+motor-side `0.1 degree` units. `trap` means
 absolute trapezoid motion in raw motor protocol units. `door`, `motor`, and
 `motor1` select the linked motor.
 

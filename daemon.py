@@ -20,6 +20,7 @@ from mcu import (
     MANUAL_OPEN_ANGLE_DEDICATED_GET_MIN_FIRMWARE,
     MANUAL_OPEN_ANGLE_MIN_FIRMWARE,
     MANUAL_OPEN_ANGLES_DEG,
+    UNIFIED_DOOR_OPEN_MIN_FIRMWARE,
     McuClient,
 )
 
@@ -201,7 +202,7 @@ class ManualOpenAngleController:
         self.verify_interval = max(0.2, float(verify_interval))
         self.unsupported_recheck_interval = max(1.0, float(unsupported_recheck_interval))
         self._state_lock = threading.Lock()
-        self._io_lock = threading.Lock()
+        self._io_lock = threading.RLock()
         self._stop = threading.Event()
         self._wake = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -402,6 +403,44 @@ class ManualOpenAngleController:
         if refresh:
             self._sync_once()
         return self._snapshot()
+
+    def door_open(self, wait: bool = False, timeout: float = 20.0) -> Dict[str, Any]:
+        """Synchronize the angle and start opening as one angle-configuration transaction."""
+        with self._io_lock:
+            status = self._sync_once()
+            with self._state_lock:
+                version_code = self._firmware_version_code
+            if version_code is None:
+                result = dict(status)
+                result["ok"] = False
+                result["error"] = status.get(
+                    "last_error",
+                    "cannot verify MCU firmware for unified door open",
+                )
+                return result
+            if version_code < UNIFIED_DOOR_OPEN_MIN_FIRMWARE:
+                result = dict(status)
+                result["ok"] = False
+                version = status.get("firmware_version") or "unknown"
+                result["error"] = (
+                    f"MCU {version} keeps API open fixed at 120 degrees; "
+                    f"unified door open requires 0x{UNIFIED_DOOR_OPEN_MIN_FIRMWARE:04x} or newer"
+                )
+                return result
+            if not status.get("applied"):
+                result = dict(status)
+                result["ok"] = False
+                result["error"] = status.get(
+                    "last_error",
+                    "unified door-open angle is not applied on the MCU",
+                )
+                return result
+            return self.client.door_open(
+                wait,
+                timeout,
+                angle_deg=status.get("applied_angle_deg"),
+                firmware_version_code=version_code,
+            )
 
     def set_angle(self, angle: Any) -> Dict[str, Any]:
         parsed_angle = parse_manual_open_angle(angle)
@@ -650,7 +689,11 @@ def dispatch(
     if cmd == "motor_release_stop":
         return client.release_stop()
     if cmd == "door_open":
-        return client.door_open(bool(args.get("wait", False)), float(args.get("timeout", 20.0)))
+        wait = bool(args.get("wait", False))
+        timeout = float(args.get("timeout", 20.0))
+        if angle_controller is not None:
+            return angle_controller.door_open(wait, timeout)
+        return client.door_open(wait, timeout)
     if cmd == "door_close":
         return client.door_close(bool(args.get("wait", False)), float(args.get("timeout", 20.0)))
     if cmd in {"manual_open_angle_get", "button_open_angle_get"}:

@@ -207,8 +207,8 @@ if (!home.result.ok) {
 std::cout << "accepted homing motion_id=" << home.motion_id << "\n";
 
 // Success is delivered asynchronously with reason="homing_switch_zeroed".
-// The calibrated close coordinate is 0 and the open coordinate is -427000,
-// both in motor-side 0.1 degree units.
+// The calibrated close coordinate is 0. The configured open coordinate is
+// -345000 at 90 degrees or -427000 at 120 degrees, in motor-side 0.1 degree units.
 
 auto move = dock.motor_trapezoid(
     interceptorctl::MotorTarget::Door,

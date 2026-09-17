@@ -1252,6 +1252,9 @@ public:
      * @param timeout_s Motion timeout in seconds. The daemon uses this value
      * for asynchronous motion events even when wait is false.
      *
+     * The target follows the unified 90/120-degree angle configured through
+     * the JSON manual_open_angle_set command or CLI door angle command.
+     *
      * @note The default is non-blocking with respect to mechanical motion. This
      * lets another customer process issue door_close() immediately to update
      * the in-progress target.

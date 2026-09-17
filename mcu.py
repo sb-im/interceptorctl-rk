@@ -54,11 +54,15 @@ CMD_ID_INTERCEPTOR_MANUAL_OPEN_ANGLE_GET = 23
 MANUAL_OPEN_ANGLES_DEG = (90, 120)
 MANUAL_OPEN_ANGLE_MIN_FIRMWARE = 0x003D
 MANUAL_OPEN_ANGLE_DEDICATED_GET_MIN_FIRMWARE = 0x003E
+UNIFIED_DOOR_OPEN_MIN_FIRMWARE = 0x003F
 
-DOOR_OPEN_POSITION_0P1DEG = -427000
+DOOR_OPEN_POSITION_90_0P1DEG = -345000
+DOOR_OPEN_POSITION_120_0P1DEG = -427000
+DOOR_OPEN_POSITIONS_0P1DEG = {
+    90: DOOR_OPEN_POSITION_90_0P1DEG,
+    120: DOOR_OPEN_POSITION_120_0P1DEG,
+}
 DOOR_CLOSE_POSITION_0P1DEG = 0
-DOOR_OPEN_SPEED_0P1RPM = 15000
-DOOR_OPEN_ACCEL_RPM_S = 2000
 DOOR_CLOSE_SPEED_0P1RPM = 7000
 DOOR_CLOSE_ACCEL_RPM_S = 2000
 RK_OBSERVED_REACHED_TOLERANCE_0P1DEG = 20
@@ -2063,16 +2067,20 @@ class McuClient:
         timeout: float = 20.0,
         target_position: Optional[int] = None,
     ) -> Dict[str, Any]:
-        ack = self.transact(name, CMD_SET_INTERCEPTOR, cmd_id)
-        result: Dict[str, Any] = public_ok_from_ack(ack)
-        if not result.get("ok"):
-            return result
-        result["accepted"] = True
-        if target_position is not None:
-            self._last_motor_target = int(target_position)
-            result["target_position"] = self._last_motor_target
-            motion_id = self._begin_motion(name, self._last_motor_target, None, None, timeout)
-            result["motion_id"] = motion_id
+        # Keep the MCU command and RK motion registration in the same critical
+        # section so a concurrent open/close request cannot register out of
+        # wire order after its ACK.
+        with self._lock:
+            ack = self.transact(name, CMD_SET_INTERCEPTOR, cmd_id)
+            result: Dict[str, Any] = public_ok_from_ack(ack)
+            if not result.get("ok"):
+                return result
+            result["accepted"] = True
+            if target_position is not None:
+                self._last_motor_target = int(target_position)
+                result["target_position"] = self._last_motor_target
+                motion_id = self._begin_motion(name, self._last_motor_target, None, None, timeout)
+                result["motion_id"] = motion_id
         if not wait:
             return result
 
@@ -2085,15 +2093,65 @@ class McuClient:
         result["error"] = result["wait_error"]
         return result
 
-    def door_open(self, wait: bool = False, timeout: float = 20.0) -> Dict[str, Any]:
-        return self._send_motor_trapezoid(
+    def door_open(
+        self,
+        wait: bool = False,
+        timeout: float = 20.0,
+        angle_deg: Optional[int] = None,
+        firmware_version_code: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        if firmware_version_code is None:
+            version_response = self.read_firmware_version(timeout=2.0, attempts=1)
+            if not version_response.get("ok"):
+                return {
+                    "ok": False,
+                    "error": (
+                        "cannot verify unified door-open firmware: "
+                        f"{version_response.get('error', 'MCU version read failed')}"
+                    ),
+                }
+            firmware_version_code = int(version_response["version_code"])
+        if firmware_version_code < UNIFIED_DOOR_OPEN_MIN_FIRMWARE:
+            return {
+                "ok": False,
+                "error": (
+                    f"MCU 0x{firmware_version_code:04x} keeps API open fixed at 120 degrees; "
+                    f"unified door open requires 0x{UNIFIED_DOOR_OPEN_MIN_FIRMWARE:04x} or newer"
+                ),
+                "firmware_version": f"0x{firmware_version_code:04x}",
+            }
+
+        if angle_deg is None:
+            angle_response = self.get_manual_open_angle(timeout=2.0)
+            if not angle_response.get("ok"):
+                return {
+                    "ok": False,
+                    "error": (
+                        "cannot resolve unified door-open angle: "
+                        f"{angle_response.get('error', 'MCU angle read failed')}"
+                    ),
+                }
+            angle_deg = angle_response.get("applied_angle_deg")
+
+        try:
+            angle_deg = int(angle_deg)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": f"invalid unified door-open angle: {angle_deg}"}
+
+        target_position = DOOR_OPEN_POSITIONS_0P1DEG.get(angle_deg)
+        if target_position is None:
+            return {"ok": False, "error": "unified door-open angle must be 90 or 120"}
+
+        result = self.interceptor_cmd(
             "door_open",
-            DOOR_OPEN_POSITION_0P1DEG,
-            DOOR_OPEN_SPEED_0P1RPM,
-            DOOR_OPEN_ACCEL_RPM_S,
+            CMD_ID_INTERCEPTOR_DOOR_OPEN,
             wait,
             timeout,
+            target_position=target_position,
         )
+        result["button_open_angle_deg"] = angle_deg
+        result["applied_angle_deg"] = angle_deg
+        return result
 
     def door_close(self, wait: bool = False, timeout: float = 20.0) -> Dict[str, Any]:
         return self._send_motor_trapezoid(
@@ -2116,21 +2174,22 @@ class McuClient:
     ) -> Dict[str, Any]:
         target_id = 0
         payload = struct.pack("<BiHH", target_id, position, speed, accel)
-        ack = self.transact(name, CMD_SET_INTERCEPTOR, CMD_ID_INTERCEPTOR_MOTOR_TRAPEZOID, payload)
-        result: Dict[str, Any] = public_ok_from_ack(ack)
-        if not result.get("ok"):
-            return result
-        result["accepted"] = True
-        self._last_motor_target = int(position)
-        result["target_position"] = self._last_motor_target
-        motion_id = self._begin_motion(
-            name,
-            self._last_motor_target,
-            int(speed),
-            int(accel),
-            timeout,
-        )
-        result["motion_id"] = motion_id
+        with self._lock:
+            ack = self.transact(name, CMD_SET_INTERCEPTOR, CMD_ID_INTERCEPTOR_MOTOR_TRAPEZOID, payload)
+            result: Dict[str, Any] = public_ok_from_ack(ack)
+            if not result.get("ok"):
+                return result
+            result["accepted"] = True
+            self._last_motor_target = int(position)
+            result["target_position"] = self._last_motor_target
+            motion_id = self._begin_motion(
+                name,
+                self._last_motor_target,
+                int(speed),
+                int(accel),
+                timeout,
+            )
+            result["motion_id"] = motion_id
         if not wait:
             return result
 
