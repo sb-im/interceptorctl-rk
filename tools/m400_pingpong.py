@@ -263,7 +263,16 @@ def print_result(result: dict, json_output: bool) -> None:
 
 def main() -> int:
     args = build_parser().parse_args()
-    app_dir = Path(__file__).resolve().parents[1]
+    script_path = Path(__file__).resolve()
+    app_candidates = [
+        script_path.parents[1],
+        Path(os.environ.get("INTERCEPTOR_APP_DIR", "/home/orangepi/interceptorctl")),
+    ]
+    app_dir = next((path for path in app_candidates if (path / "mcu.py").is_file()), None)
+    if app_dir is None:
+        raise SystemExit(
+            "cannot find mcu.py; set INTERCEPTOR_APP_DIR to the interceptorctl directory"
+        )
     sys.path.insert(0, str(app_dir))
     os.environ["INTERCEPTOR_CAN_IFACE"] = "none"
     from mcu import McuClient
