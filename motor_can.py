@@ -420,14 +420,9 @@ class MotorCanConfigurator:
                         motor_id=resolved_id,
                         poll_boundary=poll_boundary,
                     )
-                if poll_boundary["driver_enabled"] is True:
-                    raise MotorCanError(
-                        "driver_enabled",
-                        "motor driver is enabled; 0x4C was not sent",
-                        motor_id=resolved_id,
-                        motor_status_raw=poll_boundary["motor_status_raw"],
-                        driver_enabled=True,
-                    )
+                # The production motor powers up enabled by design.  Keep the
+                # observed state in the result, but do not send a control
+                # command or block the configuration-only 0x4C transaction.
 
                 # Keep the complete read-before/write/ACK/read-after exchange
                 # inside the quiet interval immediately following the MCU's
@@ -469,14 +464,6 @@ class MotorCanConfigurator:
                     sock, frames, resolved_id
                 )
                 result["readback_poll_boundary"] = readback_boundary
-                if readback_boundary["driver_enabled"] is True:
-                    raise MotorCanError(
-                        "driver_enabled_during_readback",
-                        "motor driver became enabled after configuration; 0x22 verification was not sent",
-                        motor_id=resolved_id,
-                        motor_status_raw=readback_boundary["motor_status_raw"],
-                        driver_enabled=True,
-                    )
 
                 after = self._read_homing_on_socket(sock, frames, resolved_id)
                 result["after"] = after.to_dict()
@@ -670,23 +657,16 @@ class MotorCanConfigurator:
         }
 
         # MCU firmware polls factory ID 1, so a motor at any other ID has no
-        # passive status boundary.  Actively read the old ID and fail closed
-        # unless the driver is explicitly reported disabled.
+        # passive status boundary.  Actively read the old ID to confirm that
+        # it is responsive and record its state before the configuration-only
+        # ID change.  The production motor powers up enabled by design.
         pre_change_status = self._read_status_on_socket(
             sock,
             frames,
             old_motor_id,
         )
         change["pre_change_status"] = pre_change_status
-        if pre_change_status["driver_enabled"]:
-            raise MotorCanError(
-                "driver_enabled_before_id_change",
-                "motor driver is enabled; CAN ID was not changed",
-                motor_id=old_motor_id,
-                motor_status_raw=pre_change_status["motor_status_raw"],
-                driver_enabled=True,
-                id_change=change,
-            )
+        change["driver_enabled"] = pre_change_status["driver_enabled"]
 
         # Avoid changing the driver's filter while another participant is in
         # the middle of a transaction.  No motor-control command is sent.

@@ -50,6 +50,7 @@ DESIRED_LOGICAL = bytes.fromhex(
 STATUS_DISABLED = can_frame(0x0100, bytes.fromhex("3A 02 6B"))
 STATUS_ENABLED = can_frame(0x0100, bytes.fromhex("3A 03 6B"))
 STATUS_DISABLED_7 = can_frame(0x0700, bytes.fromhex("3A 02 6B"))
+STATUS_ENABLED_7 = can_frame(0x0700, bytes.fromhex("3A 03 6B"))
 WRITE_ACK = can_frame(0x0100, bytes((0x4C, ACK_OK, 0x6B)))
 VERSION_ID_1 = can_frame(0x0100, bytes.fromhex("1F 00 07 13 14 6B"))
 VERSION_ID_2 = can_frame(0x0200, bytes.fromhex("1F 00 07 13 14 6B"))
@@ -334,15 +335,27 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertFalse(any(data[0] == 0xAE for _, data in sent))
         self.assertTrue(any(frame["direction"] == "rx" for frame in result["frames"]))
 
-    def test_apply_refuses_to_write_while_driver_is_enabled(self) -> None:
-        fake = FakeSocket([VERSION_ID_1, TIMEOUT, STATUS_ENABLED])
+    def test_apply_writes_while_driver_is_enabled(self) -> None:
+        fake = FakeSocket(
+            [
+                VERSION_ID_1,
+                TIMEOUT,
+                STATUS_ENABLED,
+                TIMEOUT,
+                *response_packets(1, CURRENT_LOGICAL),
+                WRITE_ACK,
+                STATUS_ENABLED,
+                TIMEOUT,
+                *response_packets(1, DESIRED_LOGICAL),
+            ]
+        )
         result = configurator(fake).apply_default_homing_config(1)
 
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["error_code"], "driver_enabled")
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["verified"])
         self.assertTrue(result["driver_enabled"])
         self.assertEqual(result["motor_status_raw"], 0x03)
-        self.assertEqual(unpack_sent(fake), expected_scan_queries())
+        self.assertTrue(any(data[0] == 0x4C for _, data in unpack_sent(fake)))
 
     def test_apply_can_use_confirmed_silent_bus_without_mcu_poll(self) -> None:
         fake = FakeSocket(
@@ -545,24 +558,36 @@ class MotorCanApplyTest(unittest.TestCase):
         self.assertEqual(sent[-1], (0x0700, bytes.fromhex("AE 4B 01 01 6B")))
         self.assertFalse(any(data[0] == 0x4C for _, data in sent))
 
-    def test_apply_does_not_change_id_when_old_id_driver_is_enabled(self) -> None:
-        status_enabled_7 = can_frame(0x0700, bytes.fromhex("3A 03 6B"))
-        fake = FakeSocket([VERSION_ID_7, TIMEOUT, status_enabled_7])
+    def test_apply_changes_id_when_old_id_driver_is_enabled(self) -> None:
+        fake = FakeSocket(
+            [
+                VERSION_ID_7,
+                TIMEOUT,
+                STATUS_ENABLED_7,
+                TIMEOUT,
+                CHANGE_ID_ACK_OLD_7,
+                VERSION_ID_1,
+                TIMEOUT,
+                STATUS_ENABLED,
+                TIMEOUT,
+                *response_packets(1, CURRENT_LOGICAL),
+                WRITE_ACK,
+                STATUS_ENABLED,
+                TIMEOUT,
+                *response_packets(1, DESIRED_LOGICAL),
+            ]
+        )
 
         result = configurator(fake).apply_default_homing_config()
 
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["error_code"], "driver_enabled_before_id_change")
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["verified"])
+        self.assertTrue(result["motor_id_changed"])
+        self.assertTrue(result["id_change"]["driver_enabled"])
         self.assertTrue(result["driver_enabled"])
         sent = unpack_sent(fake)
-        self.assertEqual(
-            sent,
-            [
-                *expected_scan_queries(),
-                (0x0700, bytes.fromhex("3A 6B")),
-            ],
-        )
-        self.assertFalse(any(data[0] in (0xAE, 0x4C) for _, data in sent))
+        self.assertTrue(any(data[0] == 0xAE for _, data in sent))
+        self.assertTrue(any(data[0] == 0x4C for _, data in sent))
 
     def test_apply_does_not_change_id_when_old_id_status_times_out(self) -> None:
         fake = FakeSocket([VERSION_ID_7, TIMEOUT, TIMEOUT])
@@ -629,7 +654,7 @@ class MotorCanApplyTest(unittest.TestCase):
         )
         self.assertFalse(any(data[0] == 0x4C for _, data in unpack_sent(fake)))
 
-    def test_apply_stops_when_changed_motor_is_enabled_at_id_one(self) -> None:
+    def test_apply_continues_when_changed_motor_is_enabled_at_id_one(self) -> None:
         fake = FakeSocket(
             [
                 VERSION_ID_7,
@@ -640,15 +665,22 @@ class MotorCanApplyTest(unittest.TestCase):
                 VERSION_ID_1,
                 TIMEOUT,
                 STATUS_ENABLED,
+                TIMEOUT,
+                *response_packets(1, CURRENT_LOGICAL),
+                WRITE_ACK,
+                STATUS_ENABLED,
+                TIMEOUT,
+                *response_packets(1, DESIRED_LOGICAL),
             ]
         )
 
         result = configurator(fake).apply_default_homing_config()
 
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["error_code"], "driver_enabled")
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["verified"])
         self.assertTrue(result["motor_id_changed"])
-        self.assertFalse(any(data[0] == 0x4C for _, data in unpack_sent(fake)))
+        self.assertTrue(result["driver_enabled"])
+        self.assertTrue(any(data[0] == 0x4C for _, data in unpack_sent(fake)))
 
     def test_apply_ignores_recovery_traffic_until_full_silence(self) -> None:
         position_query = can_frame(0x0100, bytes.fromhex("36 6B"))

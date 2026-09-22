@@ -290,8 +290,8 @@ the same directed scan when `--id` is omitted, then reads the driver's current
 homing parameters. `config auto` also scans IDs 1 through 32 and continues only
 when exactly one motor is found; an optional `--id` is treated as an assertion
 against that scan result. If the discovered ID is not 1, the daemon first
-confirms the driver is disabled, persistently changes it to ID 1, and repeats
-the directed 1-through-32 scan, which must find only ID 1. It then writes the
+reads and records the driver status, persistently changes it to ID 1, and
+repeats the directed 1-through-32 scan, which must find only ID 1. It then writes the
 following fixed production values and reads them back field by field:
 
 - sensorless/collision homing, clockwise direction
@@ -299,9 +299,11 @@ following fixed production values and reads them back field by field:
 - collision detection speed `80 RPM`, current `2000 mA`, time `400 ms`
 - power-on automatic homing disabled; non-volatile storage requested
 
-These commands do not enable the driver, start homing, clear position, or issue
-any movement command. Before changing a non-1 ID, the daemon actively reads its
-status and refuses to continue unless it is explicitly disabled. It also waits
+These commands do not enable or disable the driver, start homing, clear
+position, or issue any movement command. The production motor normally powers
+up enabled, so that observed state is reported but does not block ID or homing
+parameter configuration. Before changing a non-1 ID, the daemon actively reads
+its status to confirm the addressed motor is responsive. It also waits
 for the MCU's periodic CAN traffic to finish before sending the multi-frame
 configuration. Do not press the physical cover button while commissioning.
 The ID and homing storage requests are asynchronous and cannot be independently
